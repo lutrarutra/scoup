@@ -10,6 +10,90 @@ import gseapy
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 
+def scale_log_center(adata, target_sum=None):
+    adata.layers["counts"] = adata.X.copy()
+    sc.pp.normalize_total(adata, target_sum=target_sum)
+    adata.layers["ncounts"] = adata.X.copy()
+    sc.pp.log1p(adata)
+    adata.layers["centered"] = np.asarray(adata.layers["counts"] - adata.layers["counts"].mean(axis=0))
+    adata.layers["logcentered"] = np.asarray(adata.X - adata.X.mean(axis=0))
+
+def _rank_group(adata, rank_res, groupby, idx, ref_name, eps):
+    mapping = {}
+    for gene in adata.var_names:
+        mapping[gene] = { "z-score":0.0, "pvals_adj":0.0, "logFC":0.0 }
+
+    for genes, scores, pvals, logFC in list(zip(rank_res["names"], rank_res["scores"], rank_res["pvals_adj"], rank_res["logfoldchanges"])):
+        mapping[genes[idx]]["z-score"] = scores[idx]
+        mapping[genes[idx]]["pvals_adj"] = pvals[idx]
+        mapping[genes[idx]]["logFC"] = logFC[idx]
+        
+    df = pd.DataFrame(mapping).T
+    df["-log_pvals_adj"] = -np.log10(df["pvals_adj"])
+    df["significant"] = df["pvals_adj"] < 0.05
+    df["mu_expression"] = np.asarray(adata[adata.obs[groupby] == ref_name, df.index].layers["counts"].mean(axis=0))[0]
+    df["log_mu_expression"] = np.asarray(adata[:,df.index].layers["counts"].log1p().mean(0))[0]
+    df["gene_score"] = df["logFC"] * df["-log_pvals_adj"].clip(lower=None, upper=-np.log10(eps)) * df["log_mu_expression"]
+    df["abs_score"] = np.abs(df["gene_score"])
+    
+    df.index.name = ref_name + "_vs_rest"
+    return df
+
+
+def rank_marker_genes(adata, groupby, eps=1e-8):
+    rank_res = sc.tl.rank_genes_groups(adata, groupby=groupby, method="t-test", copy=True).uns["rank_genes_groups"]
+
+    adata.uns[f"rank_genes_{groupby}"] = {}
+
+    for i, ref in enumerate(adata.obs[groupby].unique()):
+        adata.uns["rank_genes_" + groupby][ref] = _rank_group(adata, rank_res, groupby, i, ref, eps)
+
+def GSEA(df, score_of_interest="gene_score", gene_set="KEGG_2021_Human", n_threads=None, seed=0):
+    if n_threads is None:
+        n_threads = threading.active_count()
+
+    res = gseapy.prerank(rnk=df[score_of_interest], gene_sets=gene_set, no_plot=True, processes=n_threads, seed=seed).res2d
+    temp = res["Tag %"].str.split("/")
+    res["matched_size"] = temp.str[0].astype(int)
+    res["geneset_size"] = temp.str[1].astype(int)
+    # TODO: get all genes inside the set:
+    # res["genes"] = res["genes"].str.split(";")
+    res["lead_genes"] = res["Lead_genes"].str.split(";")
+    res = res.rename(columns={"FDR q-val": "fdr", "NOM p-val": "pval", "NES": "nes", "FWER p-val": "fwer", "ES": "es"})
+    res["fdr"] = res["fdr"].astype(float)
+    res["pval"] = res["pval"].astype(float)
+    res["nes"] = res["nes"].astype(float)
+    res["fwer"] = res["fwer"].astype(float)
+    res["es"] = res["es"].astype(float)
+
+    res = res.drop(columns=["Lead_genes", "Tag %", "Name"])
+
+    # sg = []
+    # for i in range(res.shape[0]):
+    #     sg.append([])
+    #     for gene in res.iloc[i]["lead_genes"]:
+    #         if df.loc[gene, "pvals_adj"] < 0.05:
+    #             sg[i].append((gene, df.loc[gene, "pvals_adj"]))
+
+    #     sg[i] = sorted(sg[i], key=lambda tup: tup[1])
+    #     sg[i] = [x[0] for x in sg[i]]
+    # res["significant_genes"] = sg
+    # res["significant_size"] = res["significant_genes"].apply(len)
+    # res["significant_fraction"] = res["significant_size"] / res["geneset_size"]
+
+    
+    res["matched_fraction"] = res["matched_size"] / res["geneset_size"]
+    res["-log10_fdr"] = -np.log10(res["fdr"])
+    res["-log10_fdr"] = res["-log10_fdr"].clip(lower=0, upper=res["-log10_fdr"])
+
+    return res.sort_values("-log10_fdr", ascending=False)
+
+
+############################################
+
+# OLD STUFF
+
+############################################
 
 def to_df(adata: sc.AnnData, index_col=None) -> None:
     if index_col:
@@ -22,14 +106,6 @@ def to_csv(adata: sc.AnnData, filepath, sep=",", genes_in_cols=True) -> None:
         to_df(adata).to_csv(filepath, sep="\t")
     else:
         to_df(adata).T.to_csv(filepath, sep="\t")
-
-def scale_log_center(adata, target_sum=None):
-    adata.layers["counts"] = adata.X.copy()
-    sc.pp.normalize_total(adata, target_sum=target_sum)
-    adata.layers["ncounts"] = adata.X.copy()
-    sc.pp.log1p(adata)
-    adata.layers["centered"] = np.asarray(adata.layers["counts"] - adata.layers["counts"].mean(axis=0))
-    adata.layers["logcentered"] = np.asarray(adata.X - adata.X.mean(axis=0))
 
 def annotate(adata: sc.AnnData, annotation_path: str, annotation_cols: list, barcode_col=0, header="infer") -> None:
     '''
@@ -150,74 +226,3 @@ def export_pc_loadings(adata, filepath, n_components=None):
         out.write("GeneSymbol\t" + '\t'.join([f'PC{x+1}' for x in range(n_components)]) + "\n")
         for i in range(adata.shape[1]):
             out.write(adata.var.index.values[i] + "\t" + "\t".join(str(x) for x in adata.varm["PCs"][i,:n_components]) + "\n")
-
-def _rank_group(adata, rank_res, groupby, idx, ref_name, eps):
-    mapping = {}
-    for gene in adata.var_names:
-        mapping[gene] = { "z-score":0.0, "pvals_adj":0.0, "logFC":0.0 }
-
-    for genes, scores, pvals, logFC in list(zip(rank_res["names"], rank_res["scores"], rank_res["pvals_adj"], rank_res["logfoldchanges"])):
-        mapping[genes[idx]]["z-score"] = scores[idx]
-        mapping[genes[idx]]["pvals_adj"] = pvals[idx]
-        mapping[genes[idx]]["logFC"] = logFC[idx]
-        
-    df = pd.DataFrame(mapping).T
-    df["-log_pvals_adj"] = -np.log10(df["pvals_adj"])
-    df["significant"] = df["pvals_adj"] < 0.05
-    df["mu_expression"] = np.asarray(adata[adata.obs[groupby] == ref_name, df.index].layers["counts"].mean(axis=0))[0]
-    df["log_mu_expression"] = np.asarray(adata[:,df.index].layers["counts"].log1p().mean(0))[0]
-    df["gene_score"] = df["logFC"] * df["-log_pvals_adj"].clip(lower=None, upper=-np.log10(eps)) * df["log_mu_expression"]
-    df["abs_score"] = np.abs(df["gene_score"])
-    
-    df.index.name = ref_name + "_vs_rest"
-    return df
-
-
-def rank_marker_genes(adata, groupby, eps=1e-8):
-    rank_res = sc.tl.rank_genes_groups(adata, groupby=groupby, method="t-test", copy=True).uns["rank_genes_groups"]
-
-    adata.uns[f"rank_genes_{groupby}"] = {}
-
-    for i, ref in enumerate(adata.obs[groupby].unique()):
-        adata.uns["rank_genes_" + groupby][ref] = _rank_group(adata, rank_res, groupby, i, ref, eps)
-
-def GSEA(df, score_of_interest="gene_score", gene_set="KEGG_2021_Human", n_threads=None, seed=0):
-    if n_threads is None:
-        n_threads = threading.active_count()
-
-    res = gseapy.prerank(rnk=df[score_of_interest], gene_sets=gene_set, no_plot=True, processes=n_threads, seed=seed).res2d
-    temp = res["Tag %"].str.split("/")
-    res["matched_size"] = temp.str[0].astype(int)
-    res["geneset_size"] = temp.str[1].astype(int)
-    # TODO: get all genes inside the set:
-    # res["genes"] = res["genes"].str.split(";")
-    res["lead_genes"] = res["Lead_genes"].str.split(";")
-    res = res.rename(columns={"FDR q-val": "fdr", "NOM p-val": "pval", "NES": "nes", "FWER p-val": "fwer", "ES": "es"})
-    res["fdr"] = res["fdr"].astype(float)
-    res["pval"] = res["pval"].astype(float)
-    res["nes"] = res["nes"].astype(float)
-    res["fwer"] = res["fwer"].astype(float)
-    res["es"] = res["es"].astype(float)
-
-    res = res.drop(columns=["Lead_genes", "Tag %", "Name"])
-
-    # sg = []
-    # for i in range(res.shape[0]):
-    #     sg.append([])
-    #     for gene in res.iloc[i]["lead_genes"]:
-    #         if df.loc[gene, "pvals_adj"] < 0.05:
-    #             sg[i].append((gene, df.loc[gene, "pvals_adj"]))
-
-    #     sg[i] = sorted(sg[i], key=lambda tup: tup[1])
-    #     sg[i] = [x[0] for x in sg[i]]
-    # res["significant_genes"] = sg
-    # res["significant_size"] = res["significant_genes"].apply(len)
-    # res["significant_fraction"] = res["significant_size"] / res["geneset_size"]
-
-    
-    res["matched_fraction"] = res["matched_size"] / res["geneset_size"]
-    res["-log10_fdr"] = -np.log10(res["fdr"])
-    res["-log10_fdr"] = res["-log10_fdr"].clip(lower=0, upper=res["-log10_fdr"])
-
-    return res.sort_values("-log10_fdr", ascending=False)
-
