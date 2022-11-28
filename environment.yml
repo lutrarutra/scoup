@@ -1,0 +1,17 @@
+name: scout
+channels:
+  - conda-forge
+dependencies:
+  - python=3.8
+  - pip
+  - tqdm
+  - pandas
+  - numpy
+  - scikit-learn
+  - scanpy
+  - matplotlib
+  - seaborn
+  - scipy
+  - bioconda::gseapy
+  - ipykernel
+  - leidenalg

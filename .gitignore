@@ -1,0 +1,12 @@
+data/
+out/
+temp/
+runs/
+test/
+.vscode/
+cache/
+*.pyc
+__pycache__/
+scDebulk/
+temp.txt
+scout.egg-info/
