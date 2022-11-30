@@ -23,5 +23,6 @@ scRNA-data is handled with ScanPy, plots made with Matplotlib and Seaborn.
 
 ## How to use?
   1. `conda env create -f environment.yml`
-  2. `pip install -e .`
-  3. `import scout`
+  2. `conda activate scout`
+  3. `pip install -e .`
+  4. `import scout`
