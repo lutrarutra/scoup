@@ -15,3 +15,6 @@ dependencies:
   - bioconda::gseapy
   - ipykernel
   - leidenalg
+  - chart-studio
+  - pymde
+  - python-kaleido
