@@ -25,11 +25,16 @@ NONE_COLOR = "#d3d3d3"
 
 def pval_histogram(df, x="pvals_adj", layout=_layout, nbins=20, fig_path=None):
     bins = np.linspace(0, 1, nbins+1)
-    print(bins)
     counts, bins = np.histogram(df[x], bins=bins)
-    bins = 0.5 * (bins[:-1] + bins[1:])
+    centers = 0.5 * (bins[:-1] + bins[1:])
+    borders = [f"{bins[i]:.2f}-{bins[i+1]:.2f}" for i in range(len(bins)-1)]
+    _sum = counts.sum()
+    print(_sum)
+    proportions = [f"{counts[i]*100.0/_sum:.1f}%" for i in range(len(counts))]
     # fig = px.histogram(df, x=x, nbins=nbins)
-    fig = px.bar(x=bins, y=counts)
+    fig = px.bar(
+        x=centers, y=counts, hover_data={"Bin":borders, "Proportion":proportions},
+    )
     fig.update_layout(layout)
     fig.update_layout(
         xaxis_title=x.replace("_", " ").title(),
