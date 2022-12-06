@@ -31,17 +31,18 @@ def _rank_group(adata, rank_res, groupby, idx, ref_name, eps):
     df = pd.DataFrame(mapping).T
     df["-log_pvals_adj"] = -np.log10(df["pvals_adj"])
     df["significant"] = df["pvals_adj"] < 0.05
-    df["mu_expression"] = np.asarray(adata[adata.obs[groupby] == ref_name, df.index].layers["counts"].mean(axis=0))[0]
-    df["log_mu_expression"] = np.asarray(adata[:,df.index].layers["counts"].log1p().mean(0))[0]
-    df["gene_score"] = df["logFC"] * df["-log_pvals_adj"].clip(lower=None, upper=-np.log10(eps)) * df["log_mu_expression"]
+    df["mu_expression"] = np.asarray(adata[adata.obs[groupby] == ref_name, df.index].layers["counts"].mean(axis=0)).flatten()
+    df["log_mu_expression"] = np.asarray(np.log1p(adata[:,df.index].layers["counts"]).mean(0)).flatten()
+    df["dropout"] = 1.0 - np.asarray((adata[adata.obs[groupby] == ref_name, df.index].layers["counts"] == 0).mean(0)).flatten()
+    df["gene_score"] = df["logFC"] * df["-log_pvals_adj"].clip(lower=None, upper=-np.log10(eps)) * df["log_mu_expression"] * (1.0 - df["dropout"])
     df["abs_score"] = np.abs(df["gene_score"])
     
     df.index.name = ref_name + "_vs_rest"
     return df
 
 
-def rank_marker_genes(adata, groupby, eps=1e-8):
-    rank_res = sc.tl.rank_genes_groups(adata, groupby=groupby, method="t-test", copy=True).uns["rank_genes_groups"]
+def rank_marker_genes(adata, groupby, method="t-test", eps=1e-8):
+    rank_res = sc.tl.rank_genes_groups(adata, groupby=groupby, method=method, copy=True).uns["rank_genes_groups"]
 
     adata.uns[f"rank_genes_{groupby}"] = {}
 
