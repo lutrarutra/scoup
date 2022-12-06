@@ -23,6 +23,19 @@ PLOTLY_DISCRETE_COLORS = px.colors.qualitative.Plotly
 SC_DEFAULT_COLORS = sc.pl.palettes.default_20
 NONE_COLOR = "#d3d3d3"
 
+def pval_histogram(df, x="pvals_adj", layout=_layout, nbins=20, fig_path=None):
+    fig = px.histogram(df, x=x, nbins=nbins)
+    fig.update_layout(layout)
+    fig.update_layout(
+        xaxis_title=x.replace("_", " ").title(),
+    )
+    fig.update_traces(marker=dict(line=dict(color="black", width=1)))
+
+    if fig_path is not None:
+        fig.write_image(fig_path)
+
+    return fig
+
 # Plotly
 def violin(data, y, groupby=None, layer=None, scatter=True, box=True, mean_line=False,
     scatter_size=1.0, jitter=0.6, violin_colors=SC_DEFAULT_COLORS, layout=_layout, fig_path=None):
