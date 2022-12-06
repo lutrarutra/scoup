@@ -24,10 +24,17 @@ SC_DEFAULT_COLORS = sc.pl.palettes.default_20
 NONE_COLOR = "#d3d3d3"
 
 def pval_histogram(df, x="pvals_adj", layout=_layout, nbins=20, fig_path=None):
-    fig = px.histogram(df, x=x, nbins=nbins)
+    bins = np.linspace(0, 1, nbins+1)
+    print(bins)
+    counts, bins = np.histogram(df[x], bins=bins)
+    bins = 0.5 * (bins[:-1] + bins[1:])
+    # fig = px.histogram(df, x=x, nbins=nbins)
+    fig = px.bar(x=bins, y=counts)
     fig.update_layout(layout)
     fig.update_layout(
         xaxis_title=x.replace("_", " ").title(),
+        yaxis_title="Count",
+        bargap=0
     )
     fig.update_traces(marker=dict(line=dict(color="black", width=1)))
 
