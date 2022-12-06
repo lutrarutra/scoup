@@ -18,7 +18,7 @@ def scale_log_center(adata, target_sum=None):
     adata.layers["centered"] = np.asarray(adata.layers["counts"] - adata.layers["counts"].mean(axis=0))
     adata.layers["logcentered"] = np.asarray(adata.X - adata.X.mean(axis=0))
 
-def _rank_group(adata, rank_res, groupby, idx, ref_name, eps):
+def _rank_group(adata, rank_res, groupby, idx, ref_name, eps=None):
     mapping = {}
     for gene in adata.var_names:
         mapping[gene] = { "z-score":0.0, "pvals_adj":0.0, "logFC":0.0 }
@@ -27,21 +27,25 @@ def _rank_group(adata, rank_res, groupby, idx, ref_name, eps):
         mapping[genes[idx]]["z-score"] = scores[idx]
         mapping[genes[idx]]["pvals_adj"] = pvals[idx]
         mapping[genes[idx]]["logFC"] = logFC[idx]
-        
+
     df = pd.DataFrame(mapping).T
-    df["-log_pvals_adj"] = -np.log10(df["pvals_adj"])
+
+    if eps is None:
+        eps = np.nanmin(df["pvals_adj"].values[df["pvals_adj"].values != 0]) * 0.1
+        
+    df["-log_pvals_adj"] = (-np.log10(df["pvals_adj"])).clip(lower=None, upper=-np.log10(eps))
     df["significant"] = df["pvals_adj"] < 0.05
     df["mu_expression"] = np.asarray(adata[adata.obs[groupby] == ref_name, df.index].layers["counts"].mean(axis=0)).flatten()
     df["log_mu_expression"] = np.asarray(np.log1p(adata[:,df.index].layers["counts"]).mean(0)).flatten()
     df["dropout"] = 1.0 - np.asarray((adata[adata.obs[groupby] == ref_name, df.index].layers["counts"] == 0).mean(0)).flatten()
-    df["gene_score"] = df["logFC"] * df["-log_pvals_adj"].clip(lower=None, upper=-np.log10(eps)) * df["log_mu_expression"] * (1.0 - df["dropout"])
+    df["gene_score"] = df["logFC"] * df["-log_pvals_adj"] * df["log_mu_expression"] * (1.0 - df["dropout"])
     df["abs_score"] = np.abs(df["gene_score"])
     
     df.index.name = ref_name + "_vs_rest"
     return df
 
 
-def rank_marker_genes(adata, groupby, method="t-test", eps=1e-8):
+def rank_marker_genes(adata, groupby, method="t-test", eps=None):
     rank_res = sc.tl.rank_genes_groups(adata, groupby=groupby, method=method, copy=True).uns["rank_genes_groups"]
 
     adata.uns[f"rank_genes_{groupby}"] = {}
