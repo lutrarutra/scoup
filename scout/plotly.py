@@ -5,7 +5,9 @@ import numpy as np
 import chart_studio.plotly as py
 import plotly.graph_objects as go
 import plotly.express as px
+import plotly.figure_factory as ff
 import plotly
+from plotly.subplots import make_subplots
 
 _layout = go.Layout(
     paper_bgcolor='white',
@@ -22,6 +24,9 @@ PLOTLY_DEFAULT_COLORS = plotly.colors.DEFAULT_PLOTLY_COLORS
 PLOTLY_DISCRETE_COLORS = px.colors.qualitative.Plotly
 SC_DEFAULT_COLORS = sc.pl.palettes.default_20
 NONE_COLOR = "#d3d3d3"
+
+def seismic(zcenter):
+    return [(0, "#00004C"), (zcenter * 0.5,"#0000E6"), (zcenter, "white"), ((1-zcenter)*0.5, "#FF0808"), (1, "#840000")]
 
 def pval_histogram(df, x="pvals_adj", layout=_layout, nbins=20, fig_path=None):
     bins = np.linspace(0, 1, nbins+1)
@@ -129,6 +134,110 @@ def marker_volcano(df, x="logFC", y="-log_pvals_adj", hue="log_mu_expression", s
         )]
     )
 
+
+    if fig_path is not None:
+        fig.write_image(fig_path)
+
+    return fig
+
+def _create_categorical_row(adata, category, cmap=SC_DEFAULT_COLORS):
+    c = adata.obs[category].cat.codes.values
+    cats = adata.obs[category].cat.categories.values
+    n_cats = len(cats)
+
+    color_scale = [cmap[i] for i in range(n_cats)]
+
+    fig = make_subplots(rows=2, cols=1)
+    fig.add_trace(go.Heatmap(
+        z=[c.T], y=[category.title()],
+        colorscale=color_scale,
+        # colorbar = dict(title="Sample", tickvals=color_vals, ticktext = cats)
+    ), row=1, col=1)
+    fig.update_traces(showscale=False)
+
+    # df = pd.DataFrame(dict(x=[-100]*n_cats, y=[category.title()]*n_cats, color=cats))
+    # Dummy
+    for i, cat in enumerate(cats):
+        fig.add_trace(go.Scatter(
+            x=[-10], y=[category.title()], showlegend=True, marker=dict(color=cmap[i], size=10), mode="markers", name=f"{category.title()}: {cat}",
+            # legendgrouptitle_text=category, legendgroup = category,
+        ), row=1, col=1)
+        # fig.add_trace(go.Scatter(x=[-10], y=[category.title()], name=cat, marker=dict(color=cmap[i], size=10), mode="markers"), row=1, col=1)
+
+    fig.update_layout(
+        xaxis=dict(showgrid=False, zeroline=False, visible=True, showticklabels=False, range=[0, adata.n_obs]),
+        yaxis=dict(showgrid=False, zeroline=False, visible=True, showticklabels=True),
+        paper_bgcolor='white', plot_bgcolor='white',
+        legend=dict(orientation="h", entrywidth=70, yanchor="bottom", y=1.02, xanchor="right", title_text="Categorical", x=1)
+    )              
+    return fig
+
+def heatmap(adata, var_names, categoricals=None, layer="logcentered", fig_path=None, layout=_layout):
+    n_cats = len(categoricals)
+    h_cat = 0.3
+    n_vars = len(var_names)
+    h_vars = 0.3
+    r_cat = int(h_cat * 100.0 / (n_cats * h_cat + n_vars * h_vars))
+    r_vars = 100 - r_cat
+    height_ratios=[r_cat] * n_cats + [r_vars]
+    cmaps = [SC_DEFAULT_COLORS, PLOTLY_DISCRETE_COLORS]
+    
+    fig = make_subplots(
+        rows=len(categoricals)+1, cols=2, shared_xaxes=True, vertical_spacing=0.01,
+        row_heights=height_ratios, column_widths=[0.02, 0.98], horizontal_spacing=0.005
+    )
+
+    if not f"dendrogram_barcode" in adata.uns.keys():
+        adata.obs["barcode"] = pd.Categorical(adata.obs_names)
+        sc.tl.dendrogram(adata, groupby="barcode", var_names=var_names)
+
+    cell_order = adata.uns["dendrogram_barcode"]["categories_ordered"]
+
+    if layer == "log1p" or layer == "X":
+        z = adata[cell_order, var_names].X.toarray()
+    else:
+        z = adata[cell_order, var_names].layers[layer].toarray()
+
+    zmin, zmax = np.quantile(z, [0., 1.0])
+    zcenter = abs(zmin) / (zmax-zmin)
+
+    gene_dendro = ff.create_dendrogram(adata[:, var_names].X.toarray().T, orientation="left")
+
+    for trace in gene_dendro["data"]:
+        fig.add_trace(trace, row=len(categoricals)+1, col=1)
+        fig.update_traces(showlegend=False, line=dict(width=1.5))
+
+    for i, categorical in enumerate(categoricals):
+        subfig = _create_categorical_row(adata[cell_order, :], categorical, cmap=cmaps[i])["data"]
+        for trace in subfig:
+            fig.add_trace(trace, row=i+1, col=2)
+
+    y_ticks = gene_dendro["layout"]["yaxis"]["tickvals"]
+    dendro_order = gene_dendro["layout"]["yaxis"]["ticktext"]
+    dendro_order = list(map(int, dendro_order))
+
+    fig.add_trace(go.Heatmap(
+        z=z.T, y=y_ticks,
+        colorscale=seismic(zcenter), showlegend=False
+    ), row=len(categoricals)+1, col=2)
+
+    fig.update_layout(
+        xaxis=dict(showgrid=False, zeroline=False, visible=True, showticklabels=True, range=[0, adata.n_obs], ticks=""),
+        xaxis2=dict(showgrid=False, zeroline=False, visible=True, showticklabels=True, range=[0, adata.n_obs], ticks=""),
+        xaxis3=dict(showgrid=False, zeroline=False, visible=True, showticklabels=True, range=[0, adata.n_obs], ticks=""),
+        yaxis6=dict(showgrid=False, zeroline=False, visible=True, showticklabels=False, ticks=""),
+        paper_bgcolor="white", plot_bgcolor="white",
+        margin=dict(t=10, b=10, l=10, r=10),
+        yaxis5=dict(showgrid=False, zeroline=False, visible=True, showticklabels=True, ticks="", tickmode="array", tickvals=y_ticks, ticktext=np.array(var_names)[dendro_order]),
+        legend=dict(orientation="h", entrywidth=70, yanchor="bottom", x=0.02+0.005, y=1.02, xanchor="left", title_text="")
+    )
+
+    fig.update_layout(layout)
+
+
+    for ax in fig["layout"]:
+        if ax[:5] == "xaxis":
+            fig.update_layout({ax:dict(showgrid=False, zeroline=False, visible=False, showticklabels=False)})
 
     if fig_path is not None:
         fig.write_image(fig_path)
