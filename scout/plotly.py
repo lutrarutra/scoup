@@ -172,7 +172,7 @@ def _create_categorical_row(adata, category, cmap=SC_DEFAULT_COLORS):
 
 def heatmap(adata, var_names, categoricals=None, layer="logcentered", fig_path=None, layout=_layout):
     n_cats = len(categoricals)
-    h_cat = 0.3
+    h_cat = 0.5
     n_vars = len(var_names)
     h_vars = 0.3
     r_cat = int(h_cat * 100.0 / (n_cats * h_cat + n_vars * h_vars))
@@ -182,7 +182,7 @@ def heatmap(adata, var_names, categoricals=None, layer="logcentered", fig_path=N
     
     fig = make_subplots(
         rows=len(categoricals)+1, cols=2, shared_xaxes=True, vertical_spacing=0.01,
-        row_heights=height_ratios, column_widths=[0.02, 0.98], horizontal_spacing=0.005
+        row_heights=height_ratios, column_widths=[0.05, 0.95], horizontal_spacing=0.005
     )
 
     if not f"dendrogram_barcode" in adata.uns.keys():
@@ -191,15 +191,9 @@ def heatmap(adata, var_names, categoricals=None, layer="logcentered", fig_path=N
 
     cell_order = adata.uns["dendrogram_barcode"]["categories_ordered"]
 
-    if layer == "log1p" or layer == "X":
-        z = adata[cell_order, var_names].X.toarray()
-    else:
-        z = adata[cell_order, var_names].layers[layer].toarray()
-
-    zmin, zmax = np.quantile(z, [0., 1.0])
-    zcenter = abs(zmin) / (zmax-zmin)
-
     gene_dendro = ff.create_dendrogram(adata[:, var_names].X.toarray().T, orientation="left")
+    # Get min for the range
+    x_max = max([max(trace_data.x) for trace_data in gene_dendro["data"]])
 
     for trace in gene_dendro["data"]:
         fig.add_trace(trace, row=len(categoricals)+1, col=1)
@@ -213,19 +207,32 @@ def heatmap(adata, var_names, categoricals=None, layer="logcentered", fig_path=N
     y_ticks = gene_dendro["layout"]["yaxis"]["tickvals"]
     dendro_order = gene_dendro["layout"]["yaxis"]["ticktext"]
     dendro_order = list(map(int, dendro_order))
+    var_names_ordered = np.array(var_names)[dendro_order]
+
+
+    if layer == "log1p" or layer == "X":
+        z = adata[cell_order, var_names_ordered].X.toarray()
+    else:
+        z = adata[cell_order, var_names_ordered].layers[layer].toarray()
+
+    zmin, zmax = np.quantile(z, [0., 1.0])
+    zcenter = abs(zmin) / (zmax-zmin)
 
     fig.add_trace(go.Heatmap(
         z=z.T, y=y_ticks,
         colorscale=seismic(zcenter), showlegend=False
     ), row=len(categoricals)+1, col=2)
 
+    if layout is None:
+        layout = {}
+    layout["height"] = (5 + len(var_names)) * 20 + 50
+    fig.update_layout(layout)
+
     fig.update_layout(
         paper_bgcolor="white", plot_bgcolor="white",
         margin=dict(t=10, b=10, l=10, r=10),
         legend=dict(orientation="h", entrywidth=70, yanchor="bottom", x=0.02+0.005, y=1.02, xanchor="left", title_text="")
     )
-
-    fig.update_layout(layout)
 
     last_axis = 0
     for ax in fig["layout"]:
@@ -237,8 +244,12 @@ def heatmap(adata, var_names, categoricals=None, layer="logcentered", fig_path=N
 
     fig.update_layout({
         # Dendro x-axis and y-axis -1 last axis i.e. axis7 if axis8 is last
-        f"xaxis{last_axis-1}":dict(showgrid=False, zeroline=False, visible=False, showticklabels=False, range=[0, 100], ticks=""),
-        f"yaxis{last_axis-1}":dict(showgrid=False, zeroline=False, visible=True, showticklabels=True, ticks="", tickmode="array", tickvals=y_ticks, ticktext=np.array(var_names)[dendro_order]),
+        f"xaxis{last_axis-1}":dict(showgrid=False, zeroline=False, visible=False, showticklabels=False, range=[10, x_max+5], ticks=""),
+        f"yaxis{last_axis-1}":dict(
+            showgrid=False, zeroline=False, visible=True, showticklabels=True, ticks="",
+            tickmode="array", tickvals=y_ticks, ticktext=var_names_ordered, range=[-len(var_names)*10, 0]
+        ),
+        # f"yaxis{last_axis-1}":dict(showgrid=False, zeroline=False, visible=True, showticklabels=True, range=[-len(var_names)*10, 0]),
         # Heatmap yaxis remove y ticks i.e. gene names as we have them in dendrogram
         f"yaxis{last_axis}":dict(showgrid=False, zeroline=False, visible=False, showticklabels=False, ticks="")
     })
