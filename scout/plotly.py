@@ -155,14 +155,12 @@ def _create_categorical_row(adata, category, cmap=SC_DEFAULT_COLORS):
     ), row=1, col=1)
     fig.update_traces(showscale=False)
 
-    # df = pd.DataFrame(dict(x=[-100]*n_cats, y=[category.title()]*n_cats, color=cats))
-    # Dummy
+    # Dummy to show the colors in the legend
     for i, cat in enumerate(cats):
         fig.add_trace(go.Scatter(
-            x=[-10], y=[category.title()], showlegend=True, marker=dict(color=cmap[i], size=10), mode="markers", name=f"{category.title()}: {cat}",
+            x=[-100], y=[category.title()], showlegend=True, marker=dict(color=cmap[i], size=10), mode="markers", name=f"{category.title()}: {cat}",
             # legendgrouptitle_text=category, legendgroup = category,
         ), row=1, col=1)
-        # fig.add_trace(go.Scatter(x=[-10], y=[category.title()], name=cat, marker=dict(color=cmap[i], size=10), mode="markers"), row=1, col=1)
 
     fig.update_layout(
         xaxis=dict(showgrid=False, zeroline=False, visible=True, showticklabels=False, range=[0, adata.n_obs]),
@@ -208,7 +206,7 @@ def heatmap(adata, var_names, categoricals=None, layer="logcentered", fig_path=N
         fig.update_traces(showlegend=False, line=dict(width=1.5))
 
     for i, categorical in enumerate(categoricals):
-        subfig = _create_categorical_row(adata[cell_order, :], categorical, cmap=cmaps[i])["data"]
+        subfig = _create_categorical_row(adata[cell_order, :], categorical, cmap=cmaps[i % len(cmaps)])["data"]
         for trace in subfig:
             fig.add_trace(trace, row=i+1, col=2)
 
@@ -222,22 +220,28 @@ def heatmap(adata, var_names, categoricals=None, layer="logcentered", fig_path=N
     ), row=len(categoricals)+1, col=2)
 
     fig.update_layout(
-        xaxis=dict(showgrid=False, zeroline=False, visible=True, showticklabels=True, range=[0, adata.n_obs], ticks=""),
-        xaxis2=dict(showgrid=False, zeroline=False, visible=True, showticklabels=True, range=[0, adata.n_obs], ticks=""),
-        xaxis3=dict(showgrid=False, zeroline=False, visible=True, showticklabels=True, range=[0, adata.n_obs], ticks=""),
-        yaxis6=dict(showgrid=False, zeroline=False, visible=True, showticklabels=False, ticks=""),
         paper_bgcolor="white", plot_bgcolor="white",
         margin=dict(t=10, b=10, l=10, r=10),
-        yaxis5=dict(showgrid=False, zeroline=False, visible=True, showticklabels=True, ticks="", tickmode="array", tickvals=y_ticks, ticktext=np.array(var_names)[dendro_order]),
         legend=dict(orientation="h", entrywidth=70, yanchor="bottom", x=0.02+0.005, y=1.02, xanchor="left", title_text="")
     )
 
     fig.update_layout(layout)
 
-
+    last_axis = 0
     for ax in fig["layout"]:
         if ax[:5] == "xaxis":
-            fig.update_layout({ax:dict(showgrid=False, zeroline=False, visible=False, showticklabels=False)})
+            last_axis += 1
+            fig.update_layout({ax:dict(showgrid=False, zeroline=False, visible=False, showticklabels=False, range=[0, adata.n_obs])})
+        if ax[:5] == "yaxis":
+            fig.update_layout({ax:dict(showgrid=False, zeroline=False, visible=True, showticklabels=True)})
+
+    fig.update_layout({
+        # Dendro x-axis and y-axis -1 last axis i.e. axis7 if axis8 is last
+        f"xaxis{last_axis-1}":dict(showgrid=False, zeroline=False, visible=False, showticklabels=False, range=[0, 100], ticks=""),
+        f"yaxis{last_axis-1}":dict(showgrid=False, zeroline=False, visible=True, showticklabels=True, ticks="", tickmode="array", tickvals=y_ticks, ticktext=np.array(var_names)[dendro_order]),
+        # Heatmap yaxis remove y ticks i.e. gene names as we have them in dendrogram
+        f"yaxis{last_axis}":dict(showgrid=False, zeroline=False, visible=False, showticklabels=False, ticks="")
+    })
 
     if fig_path is not None:
         fig.write_image(fig_path)
