@@ -25,12 +25,14 @@ SC_DEFAULT_COLORS = sc.pl.palettes.default_20
 NONE_COLOR = "#d3d3d3"
 
 
-def seismic(zcenter):
+def seismic(zcenter, wcenter=0.05):
     return [
         (0, "#00004C"),
         (zcenter * 0.5, "#0000E6"),
+        (zcenter - zcenter * wcenter, "white"),
         (zcenter, "white"),
-        ((1 - zcenter) * 0.5, "#FF0808"),
+        (zcenter + zcenter * wcenter, "white"),
+        (1 - (zcenter * 0.5), "#FF0808"),
         (1, "#840000"),
     ]
 
@@ -46,15 +48,12 @@ def pval_histogram(df, x="pvals_adj", layout=_layout, nbins=20, fig_path=None):
     fig = px.bar(
         x=centers,
         y=counts,
-        hover_data={
-            "Bin": borders,
-            "Proportion": proportions
-        },
+        hover_data={"Bin": borders, "Proportion": proportions},
     )
     fig.update_layout(layout)
-    fig.update_layout(xaxis_title=x.replace("_", " ").title(),
-                      yaxis_title="Count",
-                      bargap=0)
+    fig.update_layout(
+        xaxis_title=x.replace("_", " ").title(), yaxis_title="Count", bargap=0
+    )
     fig.update_traces(marker=dict(line=dict(color="black", width=1)))
 
     if fig_path is not None:
@@ -80,19 +79,16 @@ def violin(
 ):
     if type(data) == sc.AnnData:
         if y in data.obs_keys():
-            df = pd.DataFrame({
-                y: data.obs[y],
-                groupby: data.obs[groupby]
-            },
-                              index=data.obs_names)
+            df = pd.DataFrame(
+                {y: data.obs[y], groupby: data.obs[groupby]}, index=data.obs_names
+            )
         elif y in data.var_names:
-            _y = (data[:, y].X.toarray().flatten() if layer is None else
-                  data[:, y].layers[layer].toarray().flatten())
-            df = pd.DataFrame({
-                y: _y,
-                groupby: data.obs[groupby]
-            },
-                              index=data.obs_names)
+            _y = (
+                data[:, y].X.toarray().flatten()
+                if layer is None
+                else data[:, y].layers[layer].toarray().flatten()
+            )
+            df = pd.DataFrame({y: _y, groupby: data.obs[groupby]}, index=data.obs_names)
         else:
             assert (
                 False
@@ -114,7 +110,8 @@ def violin(
                     jitter=jitter,
                     name=group,
                     line_color=violin_colors[i],
-                ))
+                )
+            )
 
     else:
         fig.add_trace(
@@ -128,7 +125,8 @@ def violin(
                 jitter=jitter,
                 name=group,
                 line_color=violin_colors[0],
-            ))
+            )
+        )
 
     fig.update_layout(layout)
     fig.update_layout(
@@ -159,22 +157,13 @@ def marker_volcano(
         y=y,
         color=hue,
         symbol="significant",
-        symbol_map={
-            True: "circle",
-            False: "x"
-        },
+        symbol_map={True: "circle", False: "x"},
         hover_name=df.index.name,
         color_continuous_scale=cmap,
-        hover_data={
-            x: ":.2f",
-            y: ":.2f",
-            hue: ":.2f",
-            "significant": False
-        },
+        hover_data={x: ":.2f", y: ":.2f", hue: ":.2f", "significant": False},
         # labels={x: "Log2 FC", y: "-Log10 p-value ", hue: "log2 Mean Expression"},
     )
-    fig.update_traces(
-        marker=dict(size=5, line=dict(width=1, color="DarkSlateGrey")))
+    fig.update_traces(marker=dict(size=5, line=dict(width=1, color="DarkSlateGrey")))
     fig.add_hline(
         y=-np.log10(significance_threshold),
         line_width=1,
@@ -186,9 +175,12 @@ def marker_volcano(
     fig.update_layout(
         xaxis_title="log2FC" if x == "logFC" else x.replace("_", " ").title(),
         yaxis_title="- Log10 Adj. P-value"
-        if y == "-log_pvals_adj" else x.replace("_", " ").title(),
+        if y == "-log_pvals_adj"
+        else x.replace("_", " ").title(),
         legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01),
-        coloraxis_colorbar=dict(title="", ),
+        coloraxis_colorbar=dict(
+            title="",
+        ),
         annotations=[
             dict(
                 x=0.99,
@@ -256,10 +248,7 @@ def _create_categorical_row(adata, category, cmap=SC_DEFAULT_COLORS):
             showticklabels=False,
             range=[0, adata.n_obs],
         ),
-        yaxis=dict(showgrid=False,
-                   zeroline=False,
-                   visible=True,
-                   showticklabels=True),
+        yaxis=dict(showgrid=False, zeroline=False, visible=True, showticklabels=True),
         paper_bgcolor="white",
         plot_bgcolor="white",
         legend=dict(
@@ -308,8 +297,9 @@ def heatmap(
 
     cell_order = adata.uns["dendrogram_barcode"]["categories_ordered"]
 
-    gene_dendro = ff.create_dendrogram(adata[:, var_names].X.toarray().T,
-                                       orientation="left")
+    gene_dendro = ff.create_dendrogram(
+        adata[:, var_names].X.toarray().T, orientation="left"
+    )
     # Get min for the range
     x_max = max([max(trace_data.x) for trace_data in gene_dendro["data"]])
 
@@ -318,9 +308,9 @@ def heatmap(
         fig.update_traces(showlegend=False, line=dict(width=1.5))
 
     for i, categorical in enumerate(categoricals):
-        subfig = _create_categorical_row(adata[cell_order, :],
-                                         categorical,
-                                         cmap=cmaps[i % len(cmaps)])["data"]
+        subfig = _create_categorical_row(
+            adata[cell_order, :], categorical, cmap=cmaps[i % len(cmaps)]
+        )["data"]
         for trace in subfig:
             fig.add_trace(trace, row=i + 1, col=2)
 
@@ -336,12 +326,10 @@ def heatmap(
 
     zmin, zmax = np.quantile(z, [0.0, 1.0])
     zcenter = abs(zmin) / (zmax - zmin)
+    print(zcenter)
 
     fig.add_trace(
-        go.Heatmap(z=z.T,
-                   y=y_ticks,
-                   colorscale=seismic(zcenter),
-                   showlegend=False),
+        go.Heatmap(z=z.T, y=y_ticks, colorscale=seismic(zcenter), showlegend=False),
         row=len(categoricals) + 1,
         col=2,
     )
@@ -370,61 +358,62 @@ def heatmap(
     for ax in fig["layout"]:
         if ax[:5] == "xaxis":
             last_axis += 1
-            fig.update_layout({
-                ax:
-                dict(
-                    showgrid=False,
-                    zeroline=False,
-                    visible=False,
-                    showticklabels=False,
-                    range=[0, adata.n_obs],
-                )
-            })
+            fig.update_layout(
+                {
+                    ax: dict(
+                        showgrid=False,
+                        zeroline=False,
+                        visible=False,
+                        showticklabels=False,
+                        range=[0, adata.n_obs],
+                    )
+                }
+            )
         if ax[:5] == "yaxis":
-            fig.update_layout({
-                ax:
-                dict(
-                    showgrid=False,
-                    zeroline=False,
-                    visible=True,
-                    showticklabels=True,
-                )
-            })
+            fig.update_layout(
+                {
+                    ax: dict(
+                        showgrid=False,
+                        zeroline=False,
+                        visible=True,
+                        showticklabels=True,
+                    )
+                }
+            )
 
-    fig.update_layout({
-        # Dendro x-axis and y-axis -1 last axis i.e. axis7 if axis8 is last
-        f"xaxis{last_axis-1}":
-        dict(
-            showgrid=False,
-            zeroline=False,
-            visible=False,
-            showticklabels=False,
-            range=[10, x_max + 5],
-            ticks="",
-        ),
-        f"yaxis{last_axis-1}":
-        dict(
-            showgrid=False,
-            zeroline=False,
-            visible=True,
-            showticklabels=True,
-            ticks="",
-            tickmode="array",
-            tickvals=y_ticks,
-            ticktext=var_names_ordered,
-            range=[-len(var_names) * 10, 0],
-        ),
-        # f"yaxis{last_axis-1}":dict(showgrid=False, zeroline=False, visible=True, showticklabels=True, range=[-len(var_names)*10, 0]),
-        # Heatmap yaxis remove y ticks i.e. gene names as we have them in dendrogram
-        f"yaxis{last_axis}":
-        dict(
-            showgrid=False,
-            zeroline=False,
-            visible=False,
-            showticklabels=False,
-            ticks="",
-        ),
-    })
+    fig.update_layout(
+        {
+            # Dendro x-axis and y-axis -1 last axis i.e. axis7 if axis8 is last
+            f"xaxis{last_axis-1}": dict(
+                showgrid=False,
+                zeroline=False,
+                visible=False,
+                showticklabels=False,
+                range=[10, x_max + 5],
+                ticks="",
+            ),
+            f"yaxis{last_axis-1}": dict(
+                showgrid=False,
+                zeroline=False,
+                visible=True,
+                showticklabels=True,
+                ticks="",
+                tickmode="array",
+                tickvals=y_ticks,
+                ticktext=var_names_ordered,
+                range=[-len(var_names) * 10, 0],
+            ),
+            # f"yaxis{last_axis-1}":dict(showgrid=False, zeroline=False, visible=True, showticklabels=True, range=[-len(var_names)*10, 0]),
+            # Heatmap yaxis remove y ticks i.e. gene names as we have them in dendrogram
+            f"yaxis{last_axis}": dict(
+                showgrid=False,
+                zeroline=False,
+                visible=False,
+                showticklabels=False,
+                ticks="",
+            ),
+        }
+    )
 
     if fig_path is not None:
         fig.write_image(fig_path)
