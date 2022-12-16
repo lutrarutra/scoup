@@ -7,7 +7,6 @@ import plotly.figure_factory as ff
 import plotly.graph_objects as go
 import scanpy as sc
 from plotly.subplots import make_subplots
-import scipy
 
 _layout = go.Layout(
     paper_bgcolor="white",
@@ -78,23 +77,17 @@ def violin(
     layout=_layout,
     fig_path=None,
 ):
-    if isinstance(data, sc.AnnData):
+    if type(data) == sc.AnnData:
         if y in data.obs_keys():
             df = pd.DataFrame(
-                data={y: data.obs[y], groupby: data.obs[groupby]},
-                index=data.obs_names
+                {y: data.obs[y], groupby: data.obs[groupby]}, index=data.obs_names
             )
         elif y in data.var_names:
-            if layer is None:
-                _y = data[:, y].X
-
-            else:
-                _y = data[:, y].layers[layer]
-
-            if isinstance(_y, scipy.sparse.csr_matrix):
-                _y = _y.toarray()
-
-            _y = _y.flatten()
+            _y = (
+                data[:, y].X.toarray().flatten()
+                if layer is None
+                else data[:, y].layers[layer].toarray().flatten()
+            )
             df = pd.DataFrame({y: _y, groupby: data.obs[groupby]}, index=data.obs_names)
         else:
             assert (
