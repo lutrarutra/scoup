@@ -63,6 +63,135 @@ def pval_histogram(df, x="pvals_adj", layout=_layout, nbins=20, fig_path=None):
     return fig
 
 
+def _legend(categories, colors, marker_size=10, marker_outline_width=None):
+    fig = go.Figure()
+    for i, cat in enumerate(categories):
+        marker = dict(color=colors[i], size=marker_size)
+        if marker_outline_width is not None:
+            marker["line"] = dict(color="black", width=1)
+        fig.add_trace(
+            go.Scatter(
+                x=[None],
+                y=[None],
+                showlegend=True,
+                marker=marker,
+                mode="markers",
+                name=f"{cat}",
+            )
+        )
+
+    return fig
+
+def _add_traces(to_figure, from_figure):
+    for trace in from_figure.data:
+        to_figure.add_trace(trace)
+
+    return to_figure
+
+
+def projection(
+    adata, obsm_layer: str = "X_umap", hue=None,
+    fig_path=None, cmap=sc.pl.palettes.default_20, layout=_layout
+):
+    fig = go.Figure()
+
+    if hue is None:
+        color = None
+    else:
+        if hue in adata.obs_keys():
+            color = adata.obs[hue]
+            if not pd.api.types.is_numeric_dtype(color):
+                fig = _add_traces(fig, _legend(
+                    categories=adata.obs[hue].cat.categories.tolist(),
+                    colors=cmap, marker_outline_width=1
+                ))
+
+        else:
+            color = adata.X[:, adata.var.index.get_loc(hue)]
+            if isinstance(color, scipy.sparse.csr_matrix):
+                color = color.toarray()
+
+            color = color.T
+
+    axis_title = obsm_layer.replace("X_", "").replace("_", " ").upper()
+
+    if (adata.obsm[obsm_layer].shape[1] == 2):
+        scatter = px.scatter(
+            x=adata.obsm[obsm_layer][:, 0],
+            y=adata.obsm[obsm_layer][:, 1],
+            color=color,
+            color_discrete_sequence=cmap,
+            labels={
+                "x": f"{axis_title} 1",
+                "y": f"{axis_title} 2",
+                "color": hue.replace("_", " ").title(),
+            },
+        )
+        scatter.update_traces(marker=dict(
+            size=6, line=dict(color="black", width=1)
+        ), showlegend=False)
+
+        scatter.update_layout(showlegend=False)
+
+        fig = _add_traces(fig, scatter)
+        fig.update_layout(
+            xaxis_title=f"{axis_title} 1",
+            yaxis_title=f"{axis_title} 2",
+        )
+
+    else:
+        scatter = px.scatter_3d(
+            x=adata.obsm[obsm_layer][:, 0],
+            y=adata.obsm[obsm_layer][:, 1],
+            z=adata.obsm[obsm_layer][:, 2],
+            color=color,
+            color_discrete_sequence=cmap,
+            labels={
+                "x": f"{axis_title} 1",
+                "y": f"{axis_title} 2",
+                "z": f"{axis_title} 3",
+                "color": hue.replace("_", " ").title()
+            },
+        )
+
+        scatter.update_traces(marker=dict(
+            size=3, line=dict(color="black", width=1)
+        ), showlegend=False)
+
+        scatter.update_layout(
+            showlegend=False,
+        )
+
+        fig = _add_traces(fig, scatter)
+        fig.update_layout(
+            scene=go.layout.Scene(
+                xaxis_title=f"{axis_title} 1",
+                yaxis_title=f"{axis_title} 2",
+                zaxis_title=f"{axis_title} 3",
+            )
+        )
+
+
+    fig.update_layout(layout)
+
+    fig.update_layout(
+        legend=dict(
+            title=hue.replace("_", "").title(),
+            y=0.5
+        ),
+    )
+    
+    fig.update_xaxes(
+        scaleanchor="y",
+        scaleratio=1,
+    )
+
+    if fig_path is not None:
+        fig.write_image(fig_path)
+
+    return fig
+
+
 # Plotly
 def violin(
     data,
