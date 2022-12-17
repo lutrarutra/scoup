@@ -26,7 +26,7 @@ SC_DEFAULT_COLORS = sc.pl.palettes.default_20
 NONE_COLOR = "#d3d3d3"
 
 
-def seismic(zcenter, wcenter=0.05):
+def seismic(zcenter, wcenter=0.01):
     return [
         (0, "#00004C"),
         (zcenter * 0.5, "#0000E6"),
@@ -401,12 +401,9 @@ def _create_categorical_row(adata, category, cmap=SC_DEFAULT_COLORS):
 
 
 def heatmap(
-    adata,
-    var_names,
-    categoricals=None,
-    layer="logcentered",
-    fig_path=None,
-    layout=_layout,
+    adata, var_names, categoricals=None,
+    layer="logcentered", fig_path=None, layout=_layout,
+    cluster_cells=True, cmap=None
 ):
     n_cats = len(categoricals)
     h_cat = 0.5
@@ -418,20 +415,18 @@ def heatmap(
     cmaps = [SC_DEFAULT_COLORS, PLOTLY_DISCRETE_COLORS]
 
     fig = make_subplots(
-        rows=len(categoricals) + 1,
-        cols=2,
-        shared_xaxes=True,
-        vertical_spacing=0.01,
-        row_heights=height_ratios,
-        column_widths=[0.05, 0.95],
-        horizontal_spacing=0.005,
+        rows=len(categoricals) + 1, cols=2, shared_xaxes=True, vertical_spacing=0.01,
+        row_heights=height_ratios, column_widths=[0.05, 0.95], horizontal_spacing=0.005,
     )
 
-    if not f"dendrogram_barcode" in adata.uns.keys():
-        adata.obs["barcode"] = pd.Categorical(adata.obs_names)
-        sc.tl.dendrogram(adata, groupby="barcode", var_names=var_names)
+    if cluster_cells:
+        if not f"dendrogram_barcode" in adata.uns.keys():
+            adata.obs["barcode"] = pd.Categorical(adata.obs_names)
+            sc.tl.dendrogram(adata, groupby="barcode", var_names=var_names)
 
-    cell_order = adata.uns["dendrogram_barcode"]["categories_ordered"]
+        cell_order = adata.uns["dendrogram_barcode"]["categories_ordered"]
+    else:
+        cell_order = adata.obs.index
 
     gene_dendro = ff.create_dendrogram(
         adata[:, var_names].X.toarray().T, orientation="left"
@@ -460,18 +455,29 @@ def heatmap(
     else:
         z = adata[cell_order, var_names_ordered].layers[layer].toarray()
 
+    
     zmin, zmax = np.quantile(z, [0.0, 1.0])
     zcenter = abs(zmin) / (zmax - zmin)
-    print(zcenter)
+    if cmap is None:
+        if "centered" in layer:
+            colorscale = seismic(zcenter)
+        else:
+            colorscale = "viridis"
+    else:
+        if cmap == "seismic":
+            colorscale = seismic(zcenter)
+        else:
+            colorscale = "viridis"
+
 
     fig.add_trace(
-        go.Heatmap(z=z.T, y=y_ticks, colorscale=seismic(zcenter), showlegend=False),
-        row=len(categoricals) + 1,
-        col=2,
+        go.Heatmap(z=z.T, y=y_ticks, showlegend=False, colorscale=colorscale),
+        row=len(categoricals) + 1, col=2,
     )
 
     if layout is None:
         layout = {}
+
     layout["height"] = (5 + len(var_names)) * 20 + 50
     fig.update_layout(layout)
 
