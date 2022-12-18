@@ -69,7 +69,7 @@ def _rank_group(adata, rank_res, groupby, idx, ref_name, eps=None):
     )
     df["abs_score"] = np.abs(df["gene_score"])
 
-    df.index.name = ref_name + "_vs_rest"
+    df.index.name = f"{ref_name}_vs_rest"
     return df
 
 
@@ -81,7 +81,7 @@ def rank_marker_genes(adata, groupby, method="t-test", eps=None):
     adata.uns[f"rank_genes_{groupby}"] = {}
 
     for i, ref in enumerate(adata.obs[groupby].unique()):
-        adata.uns["rank_genes_" + groupby][ref] = _rank_group(
+        adata.uns["rank_genes_" + groupby][str(ref)] = _rank_group(
             adata, rank_res, groupby, i, ref, eps
         )
 
