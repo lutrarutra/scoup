@@ -417,9 +417,8 @@ def _create_categorical_row(adata, category, cmap=SC_DEFAULT_COLORS):
 
 
 def heatmap(
-    adata, var_names, categoricals=None,
-    layer="logcentered", fig_path=None, layout=_layout,
-    cluster_cells=True, cmap=None
+    adata, var_names, categoricals=None, layer="logcentered", fig_path=None,
+    layout=_layout, cluster_cells_by=None, cmap=None, 
 ):
     n_cats = len(categoricals)
     h_cat = 0.5
@@ -435,12 +434,26 @@ def heatmap(
         row_heights=height_ratios, column_widths=[0.05, 0.95], horizontal_spacing=0.005,
     )
 
-    if cluster_cells:
-        if not f"dendrogram_barcode" in adata.uns.keys():
+    if cluster_cells_by is not None:
+        if "barcode" not in adata.obs.columns:
             adata.obs["barcode"] = pd.Categorical(adata.obs_names)
-            sc.tl.dendrogram(adata, groupby="barcode", var_names=var_names)
 
-        cell_order = adata.uns["dendrogram_barcode"]["categories_ordered"]
+        # Free Sort Cells, can take a while 5-10minutes depending on number of cells
+        if cluster_cells_by == "barcode":
+            if not cluster_cells_by in adata.uns.keys():
+                sc.tl.dendrogram(adata, groupby=cluster_cells_by, var_names=var_names)
+
+            cell_order = adata.uns["dendrogram_barcode"]["categories_ordered"]
+        else:
+            cell_order = []
+            for cell_type in adata.obs[cluster_cells_by].cat.categories.tolist():
+                dendro = sc.tl.dendrogram(
+                    adata[adata.obs[cluster_cells_by] == cell_type, :], groupby="barcode",
+                    var_names=var_names, inplace=False
+                )
+                _dendro = list(set(dendro["categories_ordered"]) & set(adata.obs_names))
+                cell_order.extend(_dendro)
+            
     else:
         cell_order = adata.obs.index
 
