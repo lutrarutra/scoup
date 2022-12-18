@@ -115,7 +115,7 @@ def projection(
 
     axis_title = obsm_layer.replace("X_", "").replace("_", " ").upper()
 
-    if (adata.obsm[obsm_layer].shape[1] == 2) or len(components) == 2:
+    if (adata.obsm[obsm_layer].shape[1] == 2) or (components is not None and len(components) == 2):
         if components == None:
             components = (0, 1)
 
