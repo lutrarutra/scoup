@@ -291,16 +291,37 @@ def violin(
     return fig
 
 
+def gsea_volcano(
+    gsea_df, x="nes", y="-log10_fdr", hue="matched_fraction",
+    cmap="rocket", significance_threshold=0.05, fig_path=None, layout=_layout):
+
+    fig = px.scatter(
+        gsea_df.reset_index(), x=x, y=y, color=hue, hover_name="Term",
+        hover_data={x: ":.2f", y: ":.2f", hue: ":.2f"}, color_continuous_scale="Viridis"
+    )
+
+    fig.update_layout(layout)
+
+    fig.update_traces(
+        marker=dict(size=7, line=dict(width=1, color="Black"))
+    )
+
+    fig.add_hline(
+        y=-np.log10(significance_threshold),
+        line_width=1,
+        line_dash="dash",
+        line_color=sc.pl.palettes.default_20[3],
+    )
+
+    if fig_path is not None:
+        fig.write_image(fig_path)
+
+    return fig
+
 def marker_volcano(
-    df,
-    x="logFC",
-    y="-log_pvals_adj",
-    hue="log_mu_expression",
-    significance_threshold=0.05,
-    cmap="plasma",
-    layout=_layout,
-    fig_path=None,
-):
+    df, x="logFC", y="-log_pvals_adj", hue="log_mu_expression",
+    significance_threshold=0.05, cmap="plasma", layout=_layout, fig_path=None):
+
     df["significant"] = df["pvals_adj"] <= significance_threshold
 
     fig = px.scatter(

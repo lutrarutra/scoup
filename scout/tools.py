@@ -87,12 +87,9 @@ def rank_marker_genes(adata, groupby, method="t-test", eps=None):
 
 
 def GSEA(
-    df,
-    score_of_interest="gene_score",
-    gene_set="KEGG_2021_Human",
-    n_threads=None,
-    seed=0,
-):
+    df, score_of_interest="gene_score", gene_set="KEGG_2021_Human",
+    n_threads=None, seed=0):
+
     if n_threads is None:
         n_threads = threading.active_count()
 
@@ -103,6 +100,8 @@ def GSEA(
         processes=n_threads,
         seed=seed,
     ).res2d
+
+
     temp = res["Tag %"].str.split("/")
     res["matched_size"] = temp.str[0].astype(int)
     res["geneset_size"] = temp.str[1].astype(int)
@@ -125,7 +124,6 @@ def GSEA(
     res["es"] = res["es"].astype(float)
 
     res = res.drop(columns=["Lead_genes", "Tag %", "Name"])
-
     # sg = []
     # for i in range(res.shape[0]):
     #     sg.append([])
