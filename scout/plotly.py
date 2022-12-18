@@ -91,7 +91,7 @@ def _add_traces(to_figure, from_figure):
 
 def projection(
     adata, obsm_layer: str = "X_umap", hue=None,
-    fig_path=None, cmap=sc.pl.palettes.default_20, layout=_layout
+    fig_path=None, cmap=sc.pl.palettes.default_20, layout=_layout, components=None,
 ):
     fig = go.Figure()
 
@@ -115,10 +115,13 @@ def projection(
 
     axis_title = obsm_layer.replace("X_", "").replace("_", " ").upper()
 
-    if (adata.obsm[obsm_layer].shape[1] == 2):
+    if (adata.obsm[obsm_layer].shape[1] == 2) or len(components) == 2:
+        if components == None:
+            components = (0, 1)
+
         scatter = px.scatter(
-            x=adata.obsm[obsm_layer][:, 0],
-            y=adata.obsm[obsm_layer][:, 1],
+            x=adata.obsm[obsm_layer][:, components[0]],
+            y=adata.obsm[obsm_layer][:, components[1]],
             color=color,
             color_discrete_sequence=cmap,
             labels={
@@ -140,10 +143,12 @@ def projection(
         )
 
     else:
+        if components == None:
+            components = (0, 1, 2)
         scatter = px.scatter_3d(
-            x=adata.obsm[obsm_layer][:, 0],
-            y=adata.obsm[obsm_layer][:, 1],
-            z=adata.obsm[obsm_layer][:, 2],
+            x=adata.obsm[obsm_layer][:, components[0]],
+            y=adata.obsm[obsm_layer][:, components[1]],
+            z=adata.obsm[obsm_layer][:, components[2]],
             color=color,
             color_discrete_sequence=cmap,
             labels={
