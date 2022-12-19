@@ -155,7 +155,7 @@ def projection(
                 "x": f"{axis_title} 1",
                 "y": f"{axis_title} 2",
                 "z": f"{axis_title} 3",
-                "color": hue.replace("_", " ").title()
+                "color": hue.replace("_", " ").title() if hue else None,
             },
         )
 
@@ -181,7 +181,7 @@ def projection(
 
     fig.update_layout(
         legend=dict(
-            title=hue.replace("_", "").title(),
+            title=hue.replace("_", "").title() if hue else "",
             y=0.5
         ),
     )
