@@ -145,6 +145,7 @@ def projection(
     else:
         if components == None:
             components = (0, 1, 2)
+
         scatter = px.scatter_3d(
             x=adata.obsm[obsm_layer][:, components[0]],
             y=adata.obsm[obsm_layer][:, components[1]],
@@ -173,7 +174,9 @@ def projection(
                 xaxis_title=f"{axis_title} 1",
                 yaxis_title=f"{axis_title} 2",
                 zaxis_title=f"{axis_title} 3",
-            )
+            ),
+            paper_bgcolor="white",
+            plot_bgcolor="white",
         )
 
 
