@@ -127,7 +127,7 @@ def projection(
             labels={
                 "x": f"{axis_title} 1",
                 "y": f"{axis_title} 2",
-                "color": hue.replace("_", " ").title(),
+                "color": hue.replace("_", " ").title() if hue else None,
             },
         )
         scatter.update_traces(marker=dict(
