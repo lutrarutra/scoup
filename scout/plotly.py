@@ -9,6 +9,8 @@ import scanpy as sc
 from plotly.subplots import make_subplots
 import scipy
 
+from .tools import dendrogram
+
 _layout = go.Layout(
     paper_bgcolor="white",
     plot_bgcolor="white",
@@ -465,13 +467,13 @@ def heatmap(
         # Free Sort Cells, can take a while 5-10minutes depending on number of cells
         if cluster_cells_by == "barcode":
             if not cluster_cells_by in adata.uns.keys():
-                sc.tl.dendrogram(adata, groupby=cluster_cells_by, var_names=var_names)
+                dendrogram(adata, groupby=cluster_cells_by, var_names=var_names)
 
             cell_order = adata.uns["dendrogram_barcode"]["categories_ordered"]
         else:
             cell_order = []
             for cell_type in adata.obs[cluster_cells_by].cat.categories.tolist():
-                dendro = sc.tl.dendrogram(
+                dendro = dendrogram(
                     adata[adata.obs[cluster_cells_by] == cell_type, :], groupby="barcode",
                     var_names=var_names, inplace=False
                 )

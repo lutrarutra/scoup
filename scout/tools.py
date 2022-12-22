@@ -85,10 +85,94 @@ def rank_marker_genes(adata, groupby, method="t-test", eps=None):
             adata, rank_res, groupby, i, ref, eps
         )
 
+# Temporary fix until Scanpy fixes var_names bug
+from typing import Optional, Sequence, Dict, Any
+from scanpy.logging import logging as logg
+from scanpy.tools._utils import _choose_representation
+from scanpy.plotting._anndata import _prepare_dataframe
 
-def GSEA(
-    df, score_of_interest="gene_score", gene_set="KEGG_2021_Human",
-    n_threads=None, seed=0):
+def dendrogram(
+    adata: sc.AnnData, groupby: str, n_pcs: Optional[int] = None, use_rep: Optional[str] = None,
+    var_names: Optional[Sequence[str]] = None, use_raw: Optional[bool] = None, cor_method: str = 'pearson',
+    linkage_method: str = 'complete', optimal_ordering: bool = False, key_added: Optional[str] = None, inplace: bool = True,
+) -> Optional[Dict[str, Any]]:
+    if isinstance(groupby, str):
+        # if not a list, turn into a list
+        groupby = [groupby]
+    for group in groupby:
+        if group not in adata.obs_keys():
+            raise ValueError(
+                'groupby has to be a valid observation. '
+                f'Given value: {group}, valid observations: {adata.obs_keys()}'
+            )
+        if not is_categorical_dtype(adata.obs[group]):
+            raise ValueError(
+                'groupby has to be a categorical observation. '
+                f'Given value: {group}, Column type: {adata.obs[group].dtype}'
+            )
+
+    if var_names is None:
+        rep_df = pd.DataFrame(
+            _choose_representation(adata, use_rep=use_rep, n_pcs=n_pcs)
+        )
+        categorical = adata.obs[groupby[0]]
+        if len(groupby) > 1:
+            for group in groupby[1:]:
+                # create new category by merging the given groupby categories
+                categorical = (
+                    categorical.astype(str) + "_" + adata.obs[group].astype(str)
+                ).astype('category')
+        categorical.name = "_".join(groupby)
+
+        rep_df.set_index(categorical, inplace=True)
+        categories = rep_df.index.categories
+    else:
+
+        categories, rep_df = _prepare_dataframe(
+            adata if not use_raw else adata.raw,
+            var_names, groupby, use_raw
+        )
+
+        # Correlation is not defined for rows where are values are equal
+        if rep_df.eq(rep_df.iloc[:, 0], axis=0).all(True).sum() > 0:
+            # Make sure correlation is defined
+            rep_df["dummy"] = -1
+
+    # aggregate values within categories using 'mean'
+    mean_df = rep_df.groupby(level=0).mean()
+
+    import scipy.cluster.hierarchy as sch
+    from scipy.spatial import distance
+
+    corr_matrix = mean_df.T.corr(method=cor_method)
+    corr_condensed = distance.squareform(1 - corr_matrix)
+    z_var = sch.linkage(
+        corr_condensed, method=linkage_method, optimal_ordering=optimal_ordering
+    )
+    dendro_info = sch.dendrogram(z_var, labels=list(categories), no_plot=True)
+
+    dat = dict(
+        linkage=z_var,
+        groupby=groupby,
+        use_rep=use_rep,
+        cor_method=cor_method,
+        linkage_method=linkage_method,
+        categories_ordered=dendro_info['ivl'],
+        categories_idx_ordered=dendro_info['leaves'],
+        dendrogram_info=dendro_info,
+        correlation_matrix=corr_matrix.values,
+    )
+
+    if inplace:
+        if key_added is None:
+            key_added = f'dendrogram_{"_".join(groupby)}'
+        logg.info(f'Storing dendrogram info using `.uns[{key_added!r}]`')
+        adata.uns[key_added] = dat
+    else:
+        return dat
+
+
+def GSEA(df, score_of_interest="gene_score", gene_set="KEGG_2021_Human", n_threads=None, seed=0):
 
     if n_threads is None:
         n_threads = threading.active_count()
