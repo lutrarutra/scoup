@@ -90,6 +90,7 @@ from typing import Optional, Sequence, Dict, Any
 from scanpy.logging import logging as logg
 from scanpy.tools._utils import _choose_representation
 from scanpy.plotting._anndata import _prepare_dataframe
+from pandas.api.types import is_categorical_dtype
 
 def dendrogram(
     adata: sc.AnnData, groupby: str, n_pcs: Optional[int] = None, use_rep: Optional[str] = None,

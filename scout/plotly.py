@@ -386,8 +386,7 @@ def _create_categorical_row(adata, category, cmap=SC_DEFAULT_COLORS):
     c = adata.obs[category].cat.codes.values
     cats = adata.obs[category].cat.categories.values
     n_cats = len(cats)
-
-    color_scale = [cmap[i] for i in range(n_cats)]
+    color_scale = [cmap[i % len(cmap)] for i in range(n_cats)]
 
     fig = make_subplots(rows=2, cols=1)
     fig.add_trace(
@@ -409,7 +408,7 @@ def _create_categorical_row(adata, category, cmap=SC_DEFAULT_COLORS):
                 x=[-100],
                 y=[category.title()],
                 showlegend=True,
-                marker=dict(color=cmap[i], size=10),
+                marker=dict(color=cmap[i % len(cmap)], size=10),
                 mode="markers",
                 name=f"{category.title()}: {cat}",
                 # legendgrouptitle_text=category, legendgroup = category,
@@ -417,6 +416,7 @@ def _create_categorical_row(adata, category, cmap=SC_DEFAULT_COLORS):
             row=1,
             col=1,
         )
+
 
     fig.update_layout(
         xaxis=dict(
@@ -445,7 +445,10 @@ def _create_categorical_row(adata, category, cmap=SC_DEFAULT_COLORS):
 def heatmap(
     adata, var_names, categoricals=None, layer="logcentered", fig_path=None,
     layout=_layout, cluster_cells_by=None, cmap=None, 
-):
+):  
+    if type(categoricals) is str:
+        categoricals = [categoricals]
+
     n_cats = len(categoricals)
     h_cat = 0.5
     n_vars = len(var_names)
@@ -486,17 +489,16 @@ def heatmap(
     gene_dendro = ff.create_dendrogram(
         adata[:, var_names].X.toarray().T, orientation="left"
     )
+
     # Get min for the range
     x_max = max([max(trace_data.x) for trace_data in gene_dendro["data"]])
 
     for trace in gene_dendro["data"]:
         fig.add_trace(trace, row=len(categoricals) + 1, col=1)
         fig.update_traces(showlegend=False, line=dict(width=1.5))
-
+    
     for i, categorical in enumerate(categoricals):
-        subfig = _create_categorical_row(
-            adata[cell_order, :], categorical, cmap=cmaps[i % len(cmaps)]
-        )["data"]
+        subfig = _create_categorical_row(adata[cell_order, :], categorical, cmap=cmaps[i % len(cmaps)])["data"]
         for trace in subfig:
             fig.add_trace(trace, row=i + 1, col=2)
 
