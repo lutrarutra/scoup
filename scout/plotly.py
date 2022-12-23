@@ -1,3 +1,5 @@
+from typing import Literal
+
 import chart_studio.plotly as py
 import numpy as np
 import pandas as pd
@@ -92,15 +94,17 @@ def _add_traces(to_figure, from_figure):
 
 
 def projection(
-    adata, obsm_layer: str = "X_umap", hue=None,
+    adata, obsm_layer: str = "X_umap", hue=None, hue_layer="log1p", hue_aggregate: Literal["abs", None] = "abs",
     fig_path=None, cmap=sc.pl.palettes.default_20, layout=_layout, components=None,
 ):
     fig = go.Figure()
 
     if hue is None:
         color = None
+        hue_title = None
     else:
         if hue in adata.obs_keys():
+            hue_title = hue
             color = adata.obs[hue]
             if not pd.api.types.is_numeric_dtype(color):
                 fig = _add_traces(fig, _legend(
@@ -109,11 +113,29 @@ def projection(
                 ))
 
         else:
-            color = adata.X[:, adata.var.index.get_loc(hue)]
+            if type(hue) == str:
+                hue_title = hue
+                if hue_layer == "log1p" or hue_layer == "X":
+                    color = adata.X[:, adata.var.index.get_loc(hue)]
+                elif hue_layer in adata.layers.keys():
+                    color = adata.layers[hue_layer][:, adata.var.index.get_loc(hue)]
+                else:
+                    assert False
+            elif type(hue) == list:
+                hue_title = "Marker Score"
+                if hue_aggregate == "abs":
+                    color = np.abs(adata[:, hue].layers["logcentered"]).mean(1)
+                elif hue_aggregate == None:
+                    color = adata[:, hue].layers["logcentered"].mean(1)
+            else:
+                assert False
+
             if isinstance(color, scipy.sparse.csr_matrix):
                 color = color.toarray()
 
             color = color.T
+
+    
 
     axis_title = obsm_layer.replace("X_", "").replace("_", " ").upper()
 
@@ -129,7 +151,7 @@ def projection(
             labels={
                 "x": f"{axis_title} 1",
                 "y": f"{axis_title} 2",
-                "color": hue.replace("_", " ").title() if hue else None,
+                "color": hue_title
             },
         )
         scatter.update_traces(marker=dict(
@@ -158,7 +180,7 @@ def projection(
                 "x": f"{axis_title} 1",
                 "y": f"{axis_title} 2",
                 "z": f"{axis_title} 3",
-                "color": hue.replace("_", " ").title() if hue else None,
+                "color": hue_title
             },
         )
 
@@ -186,7 +208,7 @@ def projection(
 
     fig.update_layout(
         legend=dict(
-            title=hue.replace("_", "").title() if hue else "",
+            title=hue_title,
             y=0.5
         ),
     )
