@@ -1,6 +1,6 @@
 ### Custom functions for SC RNA-seq data
 
-import threading
+import threading, warnings
 
 import gseapy
 import numpy as np
@@ -21,69 +21,76 @@ def scale_log_center(adata, target_sum=None):
     adata.layers["logcentered"] = np.asarray(adata.X - adata.X.mean(axis=0))
 
 
-def _rank_group(adata, rank_res, groupby, idx, ref_name, eps=None):
+def _rank_group(adata, rank_res, groupby, idx, ref_name, logeps):
     mapping = {}
     for gene in adata.var_names:
         mapping[gene] = {"z-score": 0.0, "pvals_adj": 0.0, "logFC": 0.0}
 
-    for genes, scores, pvals, logFC in list(
-        zip(
-            rank_res["names"],
-            rank_res["scores"],
-            rank_res["pvals_adj"],
-            rank_res["logfoldchanges"],
-        )
-    ):
+    for genes, scores, pvals, logFC in list(zip(
+        rank_res["names"], rank_res["scores"],
+        rank_res["pvals_adj"], rank_res["logfoldchanges"]
+    )):
         mapping[genes[idx]]["z-score"] = scores[idx]
         mapping[genes[idx]]["pvals_adj"] = pvals[idx]
         mapping[genes[idx]]["logFC"] = logFC[idx]
 
     df = pd.DataFrame(mapping).T
 
-    if eps is None:
-        eps = np.nanmin(df["pvals_adj"].values[df["pvals_adj"].values != 0]) * 0.1
+    _max = -np.log10(np.nanmin(df["pvals_adj"].values[df["pvals_adj"].values != 0]) * 0.1)
 
-    df["-log_pvals_adj"] = (-np.log10(df["pvals_adj"])).clip(
-        lower=None, upper=-np.log10(eps)
-    )
+    # where pvals_adj is 0
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        log_pvals_adj = -np.log10(df["pvals_adj"])
+    
+    _shape = log_pvals_adj[log_pvals_adj == np.inf].shape
+    print(f"Warning: some p-values ({_shape[0]}) were 0, scattering them around {_max:.1f}")
+    
+    log_pvals_adj[log_pvals_adj == np.inf] = _max + np.random.uniform(size=_shape) * _max * 0.2
+
+    df["-log_pvals_adj"] = log_pvals_adj
+
     df["significant"] = df["pvals_adj"] < 0.05
+
     df["mu_expression"] = np.asarray(
         adata[adata.obs[groupby] == ref_name, df.index].layers["counts"].mean(axis=0)
     ).flatten()
+
     df["log_mu_expression"] = np.asarray(
         np.log1p(adata[:, df.index].layers["counts"]).mean(0)
     ).flatten()
+
     df["dropout"] = (
-        1.0
-        - np.asarray(
-            (
-                adata[adata.obs[groupby] == ref_name, df.index].layers["counts"] == 0
-            ).mean(0)
+        1.0 - np.asarray(
+            (adata[adata.obs[groupby] == ref_name, df.index].layers["counts"] == 0).mean(0)
         ).flatten()
     )
-    df["gene_score"] = (
-        df["logFC"]
-        * df["-log_pvals_adj"]
-        * df["log_mu_expression"]
-        * (1.0 - df["dropout"])
+
+    df["gene_score"] = -(
+        df["logFC"] * df["-log_pvals_adj"] * df["log_mu_expression"] * (1.0 - df["dropout"])
     )
+
     df["abs_score"] = np.abs(df["gene_score"])
 
     df.index.name = f"{ref_name}_vs_rest"
+
     return df
 
 
-def rank_marker_genes(adata, groupby, method="t-test", eps=None):
+def rank_marker_genes(adata, groupby, method="t-test", logeps=-500, copy=False):
     rank_res = sc.tl.rank_genes_groups(
         adata, groupby=groupby, method=method, copy=True
     ).uns["rank_genes_groups"]
 
-    adata.uns[f"rank_genes_{groupby}"] = {}
+    res = {}
 
     for i, ref in enumerate(adata.obs[groupby].unique()):
-        adata.uns["rank_genes_" + groupby][str(ref)] = _rank_group(
-            adata, rank_res, groupby, i, ref, eps
-        )
+        res[str(ref)] = _rank_group(adata, rank_res, groupby, i, ref, logeps)
+
+    if not copy:
+        adata.uns[f"rank_genes_{groupby}"] = res
+    else:
+        return res
 
 # Temporary fix until Scanpy fixes var_names bug
 from typing import Optional, Sequence, Dict, Any

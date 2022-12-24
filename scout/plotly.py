@@ -352,18 +352,15 @@ def marker_volcano(
     df["significant"] = df["pvals_adj"] <= significance_threshold
 
     fig = px.scatter(
-        df.reset_index(),
-        x=x,
-        y=y,
-        color=hue,
-        symbol="significant",
-        symbol_map={True: "circle", False: "x"},
-        hover_name=df.index.name,
+        df.reset_index(), x=x, y=y, color=hue, symbol="significant",
+        symbol_map={True: "circle", False: "x"}, hover_name=df.index.name,
         color_continuous_scale=cmap,
         hover_data={x: ":.2f", y: ":.2f", hue: ":.2f", "significant": False},
-        # labels={x: "Log2 FC", y: "-Log10 p-value ", hue: "log2 Mean Expression"},
+        labels={x: "Log2 FC", y: "-Log10 p-value ", hue: "log2 Mean Expression"},
     )
+
     fig.update_traces(marker=dict(size=5, line=dict(width=1, color="DarkSlateGrey")))
+
     fig.add_hline(
         y=-np.log10(significance_threshold),
         line_width=1,
@@ -383,17 +380,10 @@ def marker_volcano(
         ),
         annotations=[
             dict(
-                x=0.99,
-                align="right",
-                valign="top",
-                text=hue.replace("_", " ").title(),
-                showarrow=False,
-                xref="paper",
-                yref="paper",
-                xanchor="left",
-                yanchor="middle",
+                x=0.99, align="right", valign="top", text=hue.replace("_", " ").title(),
+                showarrow=False, xref="paper", yref="paper", xanchor="left",
                 # Parameter textangle allow you to rotate annotation how you want
-                textangle=-90,
+                yanchor="middle", textangle=-90,
             )
         ],
     )
