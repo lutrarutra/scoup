@@ -11,7 +11,7 @@ import scanpy as sc
 from plotly.subplots import make_subplots
 import scipy
 
-from .tools import dendrogram
+from . import tools as tools
 
 _layout = go.Layout(
     paper_bgcolor="white",
@@ -24,10 +24,19 @@ _layout = go.Layout(
     # yaxis=dict(showgrid=False, zeroline=False, visible=True, showticklabels=True),
 )
 
-PLOTLY_DEFAULT_COLORS = plotly.colors.DEFAULT_PLOTLY_COLORS
 PLOTLY_DISCRETE_COLORS = px.colors.qualitative.Plotly
 SC_DEFAULT_COLORS = sc.pl.palettes.default_20
 NONE_COLOR = "#d3d3d3"
+
+_discrete_cmap_mapping = {
+    "scanpy_default": SC_DEFAULT_COLORS,
+    "plotly_qualitative": PLOTLY_DISCRETE_COLORS,
+}
+
+for obj in dir(px.colors.qualitative):
+    if not obj.startswith("_"):
+        if type(getattr(px.colors.qualitative, obj)) == list:
+            _discrete_cmap_mapping[f"plotly_{obj}"] = getattr(px.colors.qualitative, obj)
 
 
 def seismic(zcenter, wcenter=0.01):
@@ -66,11 +75,170 @@ def pval_histogram(df, x="pvals_adj", layout=_layout, nbins=20, fig_path=None):
 
     return fig
 
+def pca_explain_variance(
+    adata, plot_type: Literal["Cumulative", "Bar", "Line", "Area"] = "Cumulative",
+    n_pcs=None, layout=_layout, fig_path=None
+):  
+    print(plot_type)
+    print(n_pcs)
+    if n_pcs is None:
+        n_pcs = adata.uns["pca"]["variance_ratio"].shape[0]
+
+    if plot_type == "Bar":
+        fig = px.bar(
+            x=range(1, n_pcs + 1),
+            y=adata.uns["pca"]["variance_ratio"][:n_pcs],
+            labels={"x": f"PC", "y": f"Variance Ratio"},
+        )
+    else:
+        y = adata.uns["pca"]["variance_ratio"][:n_pcs]
+
+        _plot = None
+        if plot_type == "Line":
+            _plot = px.line
+        elif plot_type == "Area":
+            _plot = px.area
+        elif plot_type == "Cumulative":
+            _plot = px.area
+            y = np.cumsum(y)
+
+        df = pd.DataFrame({"PC": range(1, n_pcs + 1), "Variance Ratio": y})
+        fig = _plot(
+            df, x="PC", y="Variance Ratio",
+            hover_data={"Variance Ratio": ":.2f"},
+            labels={"x": f"PC", "y": f"Variance Ratio"},
+            markers=True,
+            # labels={"value": y_var_label, "Component": "PC"}
+        )
+        # fig.update_layout(yaxis_range=[-1, self.hist_n_pcs + 1])
+
+    fig.update_layout(layout)
+    fig.update_layout(
+        hovermode="x unified",
+        xaxis_title="PC",
+        yaxis_title="Variance Ratio",
+        margin=dict(t=10, b=10, l=10, r=10),
+    )
+    fig.update_traces(
+        hovertemplate="var: %{y:.2f}"
+    )
+
+    if fig_path is not None:
+        fig.write_image(fig_path)
+
+    return fig
+
+def pca_explain_corr(adata, y_var: Literal["R", "R^2"] = "R", n_pcs=None, layout=_layout, fig_path=None):
+    if n_pcs is None:
+        n_pcs = adata.uns["pca"]["variance_ratio"].shape[0]
+
+    cats = tools.get_categoric(adata)
+    Rs = np.zeros((n_pcs, len(cats)))
+
+    y_var_label = "R<sup>2</sup>" if y_var == "R^2" else "R"
+
+
+    for i, cat in enumerate(cats):
+        for j in range(n_pcs):
+            Rs[j, i] = np.corrcoef(adata.obs[cat].cat.codes, adata.obsm["X_pca"][:, j])[0, 1]
+            if y_var == "R^2":
+                Rs[j, i] = Rs[j, i] ** 2
+
+    df = pd.DataFrame(Rs, columns=cats, index=range(1, n_pcs+1))
+    df = pd.melt(df, ignore_index=False).reset_index().rename(columns={"index": "Component", "variable": "Feature"})
+    fig = px.scatter(
+        df, x="Component", y="value", color="Feature",
+        hover_data={"value": ":.2f", "Component": False},
+        labels={"value": y_var_label, "Component": "PC"}
+    )
+    fig.update_layout(hovermode="x unified")
+    fig.update_traces(
+        hovertemplate=y_var_label + " = %{y:.2f}", marker=dict(size=10, line=dict(width=2, color="DarkSlateGrey"))
+    )
+    fig.update_layout(layout)
+    fig.update_layout(
+        xaxis=dict(
+            title="PC", tick0=1, dtick=1, showgrid=False, zeroline=False,
+            visible=True, showticklabels=True,
+        ),
+        yaxis=dict(
+            range=[0, 1], title="R<sup>2</sup>" if y_var == "R^2" else "R", tick0=0, dtick=0.2, showgrid=False,
+            zeroline=False, visible=True, showticklabels=True,
+        ),
+        legend_title="Feature",
+    )
+
+    if fig_path is not None:
+        fig.write_image(fig_path)
+
+    return fig
+
+def pca_correlation_circle(adata, components=(0,1), layout=_layout, fig_path=None):
+    x = adata.varm["PCs"][:, components[0]]
+    y = adata.varm["PCs"][:, components[1]]
+    x_ratio = adata.uns["pca"]["variance_ratio"][components[0]]
+    y_ratio = adata.uns["pca"]["variance_ratio"][components[1]]
+
+    dist = np.sqrt(x**2 + y**2)
+
+    text = adata.var_names.values.copy()
+    text[dist < np.quantile(dist, 0.999)] = ""
+
+    df = pd.DataFrame(
+        {"x": x, "y": y, "Gene": adata.var_names.values, "text": text}
+    )
+    df["textposition"] = ""
+    df.loc[df["y"] > 0, "textposition"] = (
+        df.loc[df["y"] > 0, "textposition"] + "top"
+    )
+    df.loc[df["y"] == 0, "textposition"] = (
+        df.loc[df["y"] == 0, "textposition"] + "center"
+    )
+    df.loc[df["y"] < 0, "textposition"] = (
+        df.loc[df["y"] < 0, "textposition"] + "bottom"
+    )
+
+    df.loc[df["x"] < 0, "textposition"] = (
+        df.loc[df["x"] < 0, "textposition"] + " left"
+    )
+    df.loc[df["x"] > 0, "textposition"] = (
+        df.loc[df["x"] > 0, "textposition"] + " right"
+    )
+
+    xmin, xmax = np.min(x), np.max(x)
+    ymin, ymax = np.min(y), np.max(y)
+    xaxis_range = [xmin - 0.3 * xmax, xmax + 0.3 * xmax]
+    yaxis_range = [ymin - 0.3 * ymax, ymax + 0.3 * ymax]
+
+    fig = px.scatter(
+        df, x="x", y="y", text="text", hover_name="Gene",
+        hover_data={"x": ":.2f", "y": ":.2f", "Gene": False, "text": False},
+        labels={"x": f"PC {components[0]+1}", "y": f"PC {components[1]+1}"}
+    )
+    
+    fig.update_layout(layout)
+
+    fig.update_traces(
+        textposition=df["textposition"],
+        marker=dict(size=5, line=dict(width=1, color="DarkSlateGrey"))
+    )
+    
+    fig.update_layout(
+        xaxis_title=f"PC {components[0]+1} ({x_ratio*100:.1f} %)",
+        yaxis_title=f"PC {components[1]+1} ({y_ratio*100:.1f} %)",
+        xaxis_range=xaxis_range, yaxis_range=yaxis_range,
+    )
+
+    if fig_path is not None:
+        fig.write_image(fig_path)
+
+    return fig
+
 
 def _legend(categories, colors, marker_size=10, marker_outline_width=None):
     fig = go.Figure()
     for i, cat in enumerate(categories):
-        marker = dict(color=colors[i], size=marker_size)
+        marker = dict(color=colors[i % len(colors)], size=marker_size)
         if marker_outline_width is not None:
             marker["line"] = dict(color="black", width=1)
         fig.add_trace(
@@ -95,24 +263,31 @@ def _add_traces(to_figure, from_figure):
 
 def projection(
     adata, obsm_layer: str = "X_umap", hue=None, hue_layer="log1p", hue_aggregate: Literal["abs", None] = "abs",
-    fig_path=None, cmap=sc.pl.palettes.default_20, layout=_layout, components=None,
+    fig_path=None, continuous_cmap="viridis", discrete_cmap=sc.pl.palettes.default_20, layout=_layout, components=None,
 ):
     fig = go.Figure()
+    if type(discrete_cmap) == str:
+        discrete_cmap = _discrete_cmap_mapping[discrete_cmap]
 
     if hue is None:
         color = None
         hue_title = None
+        cmap = None
     else:
         if hue in adata.obs_keys():
             hue_title = hue
             color = adata.obs[hue]
             if not pd.api.types.is_numeric_dtype(color):
+                cmap = discrete_cmap
                 fig = _add_traces(fig, _legend(
                     categories=adata.obs[hue].cat.categories.tolist(),
-                    colors=cmap, marker_outline_width=1
+                    colors=discrete_cmap, marker_outline_width=1
                 ))
+            else:
+                cmap = continuous_cmap
 
         else:
+            cmap = continuous_cmap
             if type(hue) == str:
                 hue_title = hue
                 if hue_layer == "log1p" or hue_layer == "X":
@@ -135,8 +310,6 @@ def projection(
 
             color = color.T
 
-    
-
     axis_title = obsm_layer.replace("X_", "").replace("_", " ").upper()
 
     if (adata.obsm[obsm_layer].shape[1] == 2) or (components is not None and len(components) == 2):
@@ -147,7 +320,8 @@ def projection(
             x=adata.obsm[obsm_layer][:, components[0]],
             y=adata.obsm[obsm_layer][:, components[1]],
             color=color,
-            color_discrete_sequence=cmap,
+            color_discrete_sequence=cmap,   
+            color_continuous_scale=cmap,
             labels={
                 "x": f"{axis_title} 1",
                 "y": f"{axis_title} 2",
@@ -158,13 +332,15 @@ def projection(
             size=6, line=dict(color="black", width=1)
         ), showlegend=False)
 
-        scatter.update_layout(showlegend=False)
+        scatter.update_layout(showlegend=True)
 
-        fig = _add_traces(fig, scatter)
+        # fig = _add_traces(fig, scatter)
+        fig = _add_traces(scatter, fig)
         fig.update_layout(
             xaxis_title=f"{axis_title} 1",
             yaxis_title=f"{axis_title} 2",
         )
+
 
     else:
         if components == None:
@@ -176,6 +352,7 @@ def projection(
             z=adata.obsm[obsm_layer][:, components[2]],
             color=color,
             color_discrete_sequence=cmap,
+            color_continuous_scale=cmap,
             labels={
                 "x": f"{axis_title} 1",
                 "y": f"{axis_title} 2",
@@ -188,11 +365,10 @@ def projection(
             size=3, line=dict(color="black", width=1)
         ), showlegend=False)
 
-        scatter.update_layout(
-            showlegend=False,
-        )
+        scatter.update_layout(showlegend=True)
 
-        fig = _add_traces(fig, scatter)
+        # fig = _add_traces(fig, scatter)
+        fig = _add_traces(scatter, fig)
         fig.update_layout(
             scene=go.layout.Scene(
                 xaxis_title=f"{axis_title} 1",
@@ -482,13 +658,13 @@ def heatmap(
         # Free Sort Cells, can take a while 5-10minutes depending on number of cells
         if cluster_cells_by == "barcode":
             if not cluster_cells_by in adata.uns.keys():
-                dendrogram(adata, groupby=cluster_cells_by, var_names=var_names)
+                tools.dendrogram(adata, groupby=cluster_cells_by, var_names=var_names)
 
             cell_order = adata.uns["dendrogram_barcode"]["categories_ordered"]
         else:
             cell_order = []
             for cell_type in adata.obs[cluster_cells_by].cat.categories.tolist():
-                dendro = dendrogram(
+                dendro = tools.dendrogram(
                     adata[adata.obs[cluster_cells_by] == cell_type, :], groupby="barcode",
                     var_names=var_names, inplace=False
                 )

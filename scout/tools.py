@@ -9,6 +9,20 @@ import scanpy as sc
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 
+def get_categoric(adata):
+    return list(
+        set(adata.obs.columns) - set(adata.obs._get_numeric_data().columns) - set(["barcode"])
+    )
+
+def get_obs_features(adata):
+    res = adata.obs_keys() + list(adata.var_names)
+    if "barcode" in res:
+        res.remove("barcode")
+
+    return res
+
+def get_numeric(adata):
+    return list(adata.obs._get_numeric_data().columns)
 
 def scale_log_center(adata, target_sum=None):
     adata.layers["counts"] = adata.X.copy()
