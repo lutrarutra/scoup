@@ -79,8 +79,6 @@ def pca_explain_variance(
     adata, plot_type: Literal["Cumulative", "Bar", "Line", "Area"] = "Cumulative",
     n_pcs=None, layout=_layout, fig_path=None
 ):  
-    print(plot_type)
-    print(n_pcs)
     if n_pcs is None:
         n_pcs = adata.uns["pca"]["variance_ratio"].shape[0]
 
