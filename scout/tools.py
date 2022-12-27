@@ -91,18 +91,24 @@ def _rank_group(adata, rank_res, groupby, idx, ref_name, logeps):
     return df
 
 
-def rank_marker_genes(adata, groupby, method="t-test", logeps=-500, copy=False):
+def rank_marker_genes(adata, groupby, reference="rest", corr_method="benjamini-hochberg", method="t-test", logeps=-500, copy=False):
     rank_res = sc.tl.rank_genes_groups(
-        adata, groupby=groupby, method=method, copy=True
+        adata, groupby=groupby, method=method, corr_method=corr_method, copy=True, reference=reference
     ).uns["rank_genes_groups"]
 
     res = {}
 
-    for i, ref in enumerate(adata.obs[groupby].unique()):
-        res[str(ref)] = _rank_group(adata, rank_res, groupby, i, ref, logeps)
+    i = 0
+    for ref in adata.obs[groupby].unique():
+        if ref == reference:
+            continue
+        res[f"{str(ref)} vs. {reference}"] = _rank_group(adata, rank_res, groupby, i, ref, logeps)
+        i += 1
 
     if not copy:
-        adata.uns[f"rank_genes_{groupby}"] = res
+        if f"rank_genes_{groupby}" not in adata.uns:
+            adata.uns[f"rank_genes_{groupby}"] = {}
+        adata.uns[f"rank_genes_{groupby}"].update(res)
     else:
         return res
 
