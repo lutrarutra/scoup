@@ -326,7 +326,6 @@ def heatmap(
 
     zmin, zmax = np.quantile(z, [0.0, 1.0])
     zcenter = abs(zmin) / (zmax - zmin)
-    print(zcenter)
 
     fig.add_trace(
         go.Heatmap(z=z.T, y=y_ticks, colorscale=seismic(zcenter), showlegend=False),

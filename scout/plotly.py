@@ -282,10 +282,14 @@ def projection(
                     colors=discrete_cmap, marker_outline_width=1
                 ))
             else:
-                cmap = continuous_cmap
+                if continuous_cmap == "seismic":
+                    zmin, zmax = np.quantile(color, [0.0, 1.0])
+                    zcenter = abs(zmin) / (zmax - zmin)
+                    cmap = seismic(zcenter)
+                else:
+                    cmap = continuous_cmap
 
         else:
-            cmap = continuous_cmap
             if type(hue) == str:
                 hue_title = hue
                 if hue_layer == "log1p" or hue_layer == "X":
@@ -306,9 +310,17 @@ def projection(
             if isinstance(color, scipy.sparse.csr_matrix):
                 color = color.toarray()
 
+            if continuous_cmap == "seismic":
+                zmin, zmax = np.quantile(color, [0.0, 1.0])
+                zcenter = abs(zmin) / (zmax - zmin)
+                cmap = seismic(zcenter)
+            else:
+                cmap = continuous_cmap
+
             color = color.T
 
     axis_title = obsm_layer.replace("X_", "").replace("_", " ").upper()
+
 
     if (adata.obsm[obsm_layer].shape[1] == 2) or (components is not None and len(components) == 2):
         if components == None:

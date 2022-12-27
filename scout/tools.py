@@ -109,6 +109,7 @@ def rank_marker_genes(adata, groupby, reference="rest", corr_method="benjamini-h
         if f"rank_genes_{groupby}" not in adata.uns:
             adata.uns[f"rank_genes_{groupby}"] = {}
         adata.uns[f"rank_genes_{groupby}"].update(res)
+        print("Added results to: adata.uns['rank_genes_{}']".format(groupby))
     else:
         return res
 
@@ -200,7 +201,7 @@ def dendrogram(
         return dat
 
 
-def GSEA(df, score_of_interest="gene_score", gene_set="KEGG_2021_Human", n_threads=None, seed=0):
+def GSEA(df, score_of_interest="gene_score", gene_set="KEGG_2021_Human", n_threads=None, seed=0, copy=True):
 
     if n_threads is None:
         n_threads = threading.active_count()
@@ -253,7 +254,10 @@ def GSEA(df, score_of_interest="gene_score", gene_set="KEGG_2021_Human", n_threa
     res["-log10_fdr"] = -np.log10(res["fdr"])
     res["-log10_fdr"] = res["-log10_fdr"].clip(lower=0, upper=res["-log10_fdr"])
 
-    return res.sort_values("-log10_fdr", ascending=False)
+    res = res.sort_values("-log10_fdr", ascending=False)
+    res.index.name = gene_set
+
+    return res
 
 
 ############################################
