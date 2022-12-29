@@ -147,7 +147,7 @@ def heatmap(
         if cmap == "seismic":
             colorscale = colors.seismic(zcenter)
         else:
-            colorscale = "viridis"
+            colorscale = cmap
 
     fig.add_trace(
         go.Heatmap(z=z.T, y=y_ticks, showlegend=False, colorscale=colorscale),
