@@ -157,7 +157,7 @@ def heatmap(
     if layout is None:
         layout = {}
 
-    layout["height"] = (5 + len(var_names)) * 20 + 50
+    layout["height"] = (5 + len(var_names)) * 20 + 20 * len(categoricals)
     fig.update_layout(layout)
 
     fig.update_layout(
@@ -179,28 +179,24 @@ def heatmap(
     for ax in fig["layout"]:
         if ax[:5] == "xaxis":
             last_axis += 1
-            fig.update_layout(
-                {
-                    ax: dict(
-                        showgrid=False,
-                        zeroline=False,
-                        visible=False,
-                        showticklabels=False,
-                        range=[0, adata.n_obs],
-                    )
-                }
-            )
+            fig.update_layout({
+                ax: dict(
+                    showgrid=False,
+                    zeroline=False,
+                    visible=False,
+                    showticklabels=False,
+                    range=[0, adata.n_obs],
+                )
+            })
         if ax[:5] == "yaxis":
-            fig.update_layout(
-                {
-                    ax: dict(
-                        showgrid=False,
-                        zeroline=False,
-                        visible=True,
-                        showticklabels=True,
-                    )
-                }
-            )
+            fig.update_layout({
+                ax: dict(
+                    showgrid=False,
+                    zeroline=False,
+                    visible=True,
+                    showticklabels=True,
+                )
+            })
 
     fig.update_layout(
         {

@@ -58,7 +58,8 @@ def _rank_group(adata, rank_res, groupby, idx, ref_name, logeps):
         log_pvals_adj = -np.log10(df["pvals_adj"])
     
     _shape = log_pvals_adj[log_pvals_adj == np.inf].shape
-    print(f"Warning: some p-values ({_shape[0]}) were 0, scattering them around {_max:.1f}")
+    if _shape[0] > 0:
+        print(f"Warning: some p-values ({_shape[0]}) were 0, scattering them around {_max:.1f}")
     
     log_pvals_adj[log_pvals_adj == np.inf] = _max + np.random.uniform(size=_shape) * _max * 0.2
 
