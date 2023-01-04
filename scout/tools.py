@@ -107,10 +107,12 @@ def rank_marker_genes(adata, groupby, reference="rest", corr_method="benjamini-h
         i += 1
 
     if not copy:
-        if f"rank_genes_{groupby}" not in adata.uns:
-            adata.uns[f"rank_genes_{groupby}"] = {}
-        adata.uns[f"rank_genes_{groupby}"].update(res)
-        print("Added results to: adata.uns['rank_genes_{}']".format(groupby))
+        if "de" not in adata.uns:
+            adata.uns["de"] = {}
+
+        adata.uns["de"][groupby] = res
+
+        print(f"Added results to: adata.uns['de']['{groupby}']")
     else:
         return res
 
@@ -179,6 +181,9 @@ def dendrogram(
     z_var = sch.linkage(
         corr_condensed, method=linkage_method, optimal_ordering=optimal_ordering
     )
+    # Numerical errors can lead to small negative values in the linkage matrix
+    assert np.min(z_var) > -1e-5, "Negative values in linkage matrix"
+    z_var = z_var.clip(min=0)
     dendro_info = sch.dendrogram(z_var, labels=list(categories), no_plot=True)
 
     dat = dict(
