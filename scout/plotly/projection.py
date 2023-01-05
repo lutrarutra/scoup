@@ -1,4 +1,5 @@
 from typing import Literal
+import random
 
 import plotly.graph_objects as go
 import plotly.express as px
@@ -44,17 +45,18 @@ def projection(
     layout=default_layout, components=None,
 ):
     fig = go.Figure()
+
     if type(discrete_cmap) == str:
         discrete_cmap = colors.get_discrete_colorscales()[discrete_cmap]
 
     if hue is None:
         color = None
-        hue_title = None
+        hue_title = ""
         cmap = None
     else:
         if hue in adata.obs_keys():
             hue_title = hue
-            color = adata.obs[hue]
+            color = adata.obs[hue].values
             if not pd.api.types.is_numeric_dtype(color):
                 cmap = discrete_cmap
                 fig = _add_traces(fig, _legend(
@@ -70,7 +72,7 @@ def projection(
                     cmap = continuous_cmap
 
         else:
-            if type(hue) == str:
+            if isinstance(hue, str):
                 hue_title = hue
                 if hue_layer == "log1p" or hue_layer == "X":
                     color = adata.X[:, adata.var.index.get_loc(hue)]
@@ -78,7 +80,8 @@ def projection(
                     color = adata.layers[hue_layer][:, adata.var.index.get_loc(hue)]
                 else:
                     assert False
-            elif type(hue) == list:
+                    
+            elif isinstance(hue, list):
                 hue_title = "Marker Score"
                 if hue_aggregate == "abs":
                     color = np.abs(adata[:, hue].layers["logcentered"]).mean(1)
@@ -90,6 +93,8 @@ def projection(
             if isinstance(color, scipy.sparse.csr_matrix):
                 color = color.toarray()
 
+            color = color.flatten()
+
             if continuous_cmap == "seismic":
                 zmin, zmax = np.quantile(color, [0.0, 1.0])
                 zcenter = abs(zmin) / (zmax - zmin)
@@ -97,33 +102,33 @@ def projection(
             else:
                 cmap = continuous_cmap
 
-            color = color.T
-
     axis_title = obsm_layer.replace("X_", "").replace("_", " ").upper()
-
+    
     if (adata.obsm[obsm_layer].shape[1] == 2) or (components is not None and len(components) == 2):
         if components == None:
             components = (0, 1)
-
+        
         df = pd.DataFrame(dict(
             x=adata.obsm[obsm_layer][:, components[0]],
-            y=adata.obsm[obsm_layer][:, components[1]],
-            color=color,
+            y=adata.obsm[obsm_layer][:, components[1]]
         ))
+
+        if color is not None:
+            df["color"] = color
+
         scatter = px.scatter(
             data_frame=df, x="x", y="y",
-            color="color",
+            color="color" if color is not None else None,
             color_discrete_sequence=cmap,
             color_continuous_scale=cmap,
             labels={
                 "x": f"{axis_title} {components[0] + 1}",
                 "y": f"{axis_title} {components[1] + 1}",
-                "color": hue_title
             },
         )
         scatter.update_traces(
             marker=dict(
-                size=6, line=dict(color="black", width=1)
+                size=6.0, opacity=1.0, line=dict(color="black", width=1.0)
             ),
             showlegend=False,
             hovertemplate=(
@@ -144,12 +149,14 @@ def projection(
             x=adata.obsm[obsm_layer][:, components[0]],
             y=adata.obsm[obsm_layer][:, components[1]],
             z=adata.obsm[obsm_layer][:, components[2]],
-            color=color,
         ))
+
+        if color is not None:
+            df["color"] = color
 
         scatter = px.scatter_3d(
             data_frame=df, x="x", y="y", z="z",
-            color="color",
+            color="color" if color is not None else None,
             color_discrete_sequence=cmap,
             color_continuous_scale=cmap,
         )

@@ -1,5 +1,7 @@
 ### Custom functions for SC RNA-seq data
 
+from typing import Literal
+
 import threading, warnings
 
 import gseapy
@@ -207,7 +209,10 @@ def dendrogram(
         return dat
 
 
-def GSEA(df, score_of_interest="gene_score", gene_set="KEGG_2021_Human", n_threads=None, seed=0, copy=True):
+def GSEA(
+    df, score_of_interest="gene_score", gene_set="KEGG_2021_Human", n_threads=None, seed=0,
+    lead_genes_type: Literal["list","str"] = "list"
+    ):
 
     if n_threads is None:
         n_threads = threading.active_count()
@@ -225,8 +230,11 @@ def GSEA(df, score_of_interest="gene_score", gene_set="KEGG_2021_Human", n_threa
     res["matched_size"] = temp.str[0].astype(int)
     res["geneset_size"] = temp.str[1].astype(int)
     # TODO: get all genes inside the set:
+    if lead_genes_type == "list":
+        res["lead_genes"] = res["Lead_genes"].str.split(";")
+    else:
+        res["lead_genes"] = res["Lead_genes"]
     # res["genes"] = res["genes"].str.split(";")
-    res["lead_genes"] = res["Lead_genes"].str.split(";")
     res = res.rename(
         columns={
             "FDR q-val": "fdr",
@@ -262,8 +270,9 @@ def GSEA(df, score_of_interest="gene_score", gene_set="KEGG_2021_Human", n_threa
 
     res = res.sort_values("-log10_fdr", ascending=False)
     res.index.name = gene_set
-
     return res
+
+    
 
 
 ############################################
