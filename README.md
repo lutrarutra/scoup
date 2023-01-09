@@ -31,7 +31,7 @@ Pipeline: [Colab](https://colab.research.google.com/drive/1qSTiDNZSUnKlgyuTNfLeL
 ## Trimap Projection
 ![alt text](https://github.com/lutrarutra/scout/blob/main/figures/trimap_projection.png?raw=true)
 
-## 3D Projection (Look better live)
+## 3D Projection (Looks better live)
 ![alt text](https://github.com/lutrarutra/scout/blob/main/figures/trimap_3d_projection.png?raw=true)
 
 ## DE Volcano
