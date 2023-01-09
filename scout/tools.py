@@ -8,8 +8,7 @@ import gseapy
 import numpy as np
 import pandas as pd
 import scanpy as sc
-from sklearn.decomposition import PCA
-from sklearn.preprocessing import StandardScaler
+import scipy
 
 def get_categoric(adata):
     return list(
@@ -25,6 +24,21 @@ def get_obs_features(adata):
 
 def get_numeric(adata):
     return list(adata.obs._get_numeric_data().columns)
+
+
+def calculate_dispersion_metrics(adata):
+    ncounts = adata.layers["ncounts"]
+    if isinstance(ncounts, scipy.sparse.csr_matrix):
+        ncounts = ncounts.toarray()
+    adata.var["cv2"] = (ncounts.std(0) / ncounts.mean(0)) ** 2
+    adata.var["mu"] = ncounts.mean(0)
+
+
+def apply_mt_qc(adata, mt_prefix="MT-"):
+    adata.var["mt"] = adata.var_names.str.startswith(mt_prefix)
+    sc.pp.calculate_qc_metrics(
+        adata, qc_vars=["mt"], percent_top=False, log1p=False, inplace=True
+    )
 
 def scale_log_center(adata, target_sum=None):
     adata.layers["counts"] = adata.X.copy()

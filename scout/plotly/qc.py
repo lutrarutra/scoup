@@ -11,10 +11,17 @@ def dispersion_plot(
     adata, x="mu", y="cv2", log_x=True, log_y=True,
     layout=default_layout, fig_path=None
 ):
+    add_hue = "highly_variable" in adata.var_keys()
+
+    if add_hue:
+        cmap = ["#636EFA", "#d3d3d3"] if adata.var["highly_variable"][0] else ["#d3d3d3", "#636EFA"]
+    else:
+        cmap = ["#636EFA"]
+
     fig = px.scatter(
         adata.var.reset_index(),
-        x=x, y=y, log_x=log_x, log_y=log_y,
-        color_continuous_scale=px.colors.sequential.Viridis,
+        x=x, y=y, log_x=log_x, log_y=log_y, color="highly_variable",
+        color_continuous_scale=cmap, color_discrete_sequence=cmap,
         hover_name="index",
     )
     fig.update_traces(
@@ -22,6 +29,8 @@ def dispersion_plot(
     )
     fig.update_layout(layout)
     fig.update_layout(xaxis_title="Log Mean Expression", yaxis_title="CV^2")
+    if add_hue:
+        fig.update_layout(legend_title="Highly Variable")
 
     if fig_path:
         fig.write_image(fig_path)
@@ -58,7 +67,7 @@ def qc_violin(adata, layout=default_layout, fig_path=None):
     return fig
 
 
-def mt_plot(adata, pct_counts_mt=5, layout=default_layout, fig_path=None):
+def mt_plot(adata, pct_counts_mt=5.0, layout=default_layout, fig_path=None):
     color = (adata.obs["pct_counts_mt"] > pct_counts_mt).values
 
     cmap = ["#d3d3d3", "#636EFA"] if color[0] else ["#636EFA", "#d3d3d3"]
