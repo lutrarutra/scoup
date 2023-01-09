@@ -26,7 +26,7 @@ def pval_histogram(df, x="pvals_adj", layout=default_layout, nbins=20, fig_path=
     fig.update_traces(marker=dict(line=dict(color="black", width=1)))
 
     if fig_path is not None:
-        fig.write_image(fig_path)
+        fig.write_image(fig_path, scale=5)
 
     return fig
 
@@ -75,6 +75,6 @@ def marker_volcano(
     )
 
     if fig_path is not None:
-        fig.write_image(fig_path)
+        fig.write_image(fig_path, scale=5)
 
     return fig

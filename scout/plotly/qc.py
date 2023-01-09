@@ -33,7 +33,7 @@ def dispersion_plot(
         fig.update_layout(legend_title="Highly Variable")
 
     if fig_path:
-        fig.write_image(fig_path)
+        fig.write_image(fig_path, scale=5)
 
     return fig
 
@@ -62,7 +62,7 @@ def qc_violin(adata, layout=default_layout, fig_path=None):
     fig.update_layout(showlegend=False)
 
     if fig_path:
-        fig.write_image(fig_path)
+        fig.write_image(fig_path, scale=5)
 
     return fig
 
@@ -96,6 +96,6 @@ def mt_plot(adata, pct_counts_mt=5.0, layout=default_layout, fig_path=None):
     )
 
     if fig_path:
-        fig.write_image(fig_path)
+        fig.write_image(fig_path, scale=5)
 
     return fig

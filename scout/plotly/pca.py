@@ -55,7 +55,7 @@ def pca_explain_var(
     )
 
     if fig_path is not None:
-        fig.write_image(fig_path)
+        fig.write_image(fig_path, scale=5)
 
     return fig
 
@@ -100,7 +100,7 @@ def pca_explain_corr(adata, y_var: Literal["R", "R^2"] = "R", n_pcs=None, layout
     )
 
     if fig_path is not None:
-        fig.write_image(fig_path)
+        fig.write_image(fig_path, scale=5)
 
     return fig
 
@@ -162,6 +162,6 @@ def pca_corr_circle(adata, components=(0, 1), layout=default_layout, fig_path=No
     )
 
     if fig_path is not None:
-        fig.write_image(fig_path)
+        fig.write_image(fig_path, scale=5)
 
     return fig

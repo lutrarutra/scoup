@@ -202,6 +202,6 @@ def projection(
     )
 
     if fig_path is not None:
-        fig.write_image(fig_path)
+        fig.write_image(fig_path, scale=5)
 
     return fig
