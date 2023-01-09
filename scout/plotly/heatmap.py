@@ -166,7 +166,7 @@ def heatmap(
         margin=dict(t=10, b=10, l=10, r=10),
         legend=dict(
             orientation="h",
-            entrywidth=70,
+            # entrywidth=70,
             yanchor="bottom",
             x=0.02 + 0.005,
             y=1.02,
