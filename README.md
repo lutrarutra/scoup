@@ -1,7 +1,10 @@
-# SCout
-Tools for Single-Cell mRNA-seq (sc RNA-seq) Analysis.
+# scout - reproducible single-cell data analysis with interactive visualisations.
 
-scRNA-data is handled with ScanPy, plots made with Matplotlib and Seaborn.
+scRNA-data is handled with ScanPy, plots made with Plotly.
+
+Pipeline: [Colab](https://colab.research.google.com/drive/1qSTiDNZSUnKlgyuTNfLeLR9TIGKJY1cp?usp=sharing)
+
+# Additional plots for Matplotlib (old stuff)
 
 ## Volcano Plot
 ![alt text](https://github.com/lutrarutra/scout/blob/main/figures/volcano.png?raw=true)
