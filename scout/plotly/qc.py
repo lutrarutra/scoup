@@ -20,7 +20,7 @@ def dispersion_plot(
 
     fig = px.scatter(
         adata.var.reset_index(),
-        x=x, y=y, log_x=log_x, log_y=log_y, color="highly_variable",
+        x=x, y=y, log_x=log_x, log_y=log_y, color="highly_variable" if add_hue else None,
         color_continuous_scale=cmap, color_discrete_sequence=cmap,
         hover_name="index",
     )
