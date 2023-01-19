@@ -30,6 +30,49 @@ def pval_histogram(df, x="pvals_adj", layout=default_layout, nbins=20, fig_path=
 
     return fig
 
+
+def scatter_marker_scores(
+    df, x="logFC", y="gene_score", hue="log_mu_expression", style="significant",
+    layout=default_layout, cmap="plasma", fig_path=None
+):
+    fig = px.scatter(
+        df.reset_index(), x=x, y=y, color=hue, symbol=style,
+        symbol_map={True: "circle", False: "x"}, hover_name=df.index.name,
+        color_continuous_scale=cmap,
+        hover_data={x: ":.2f", y: ":.2f", hue: ":.2f", style: False}
+        # labels={x: "Log2 FC", y: "-Log10 p-value ", hue: "log2 Mean Expression"},
+    )
+    fig.update_traces(marker=dict(size=5, line=dict(width=1, color="DarkSlateGrey")))
+    fig.update_layout(layout)
+    fig.update_layout(
+        xaxis_title="log2FC" if x == "logFC" else x.replace("_", " ").title(),
+        yaxis_title=y.replace("_", " ").title(),
+        legend=dict(
+            title=style.replace("_", " ").title(),
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1
+        ),
+        coloraxis_colorbar=dict(
+            title="",
+        ),
+        annotations=[
+            dict(
+                x=0.99, align="right", valign="top", text=hue.replace("_", " ").title(),
+                showarrow=False, xref="paper", yref="paper", xanchor="left",
+                # Parameter textangle allow you to rotate annotation how you want
+                yanchor="middle", textangle=-90,
+            )
+        ],
+    )
+
+    if fig_path is not None:
+        fig.write_image(fig_path, scale=5)
+    
+    return fig
+
 def marker_volcano(
     df, x="logFC", y="-log_pvals_adj", hue="log_mu_expression",
     significance_threshold=0.05, cmap="plasma", layout=default_layout, fig_path=None

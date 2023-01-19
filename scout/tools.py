@@ -97,8 +97,9 @@ def _rank_group(adata, rank_res, groupby, idx, ref_name, logeps):
         ).flatten()
     )
 
-    df["gene_score"] = -(
-        df["logFC"] * df["-log_pvals_adj"] * df["log_mu_expression"] * (1.0 - df["dropout"])
+    df["gene_score"] = (
+        df["logFC"] * (1-df["pvals_adj"]) * df["log_mu_expression"]# * (1.0 - df["dropout"])
+        # np.sign(df["logFC"]) * (1-df["pvals_adj"]) #* df["log_mu_expression"]# * (1.0 - df["dropout"])
     )
 
     df["abs_score"] = np.abs(df["gene_score"])
@@ -108,7 +109,10 @@ def _rank_group(adata, rank_res, groupby, idx, ref_name, logeps):
     return df
 
 
-def rank_marker_genes(adata, groupby, reference="rest", corr_method="benjamini-hochberg", method="t-test", logeps=-500, copy=False):
+def rank_marker_genes(
+    adata, groupby, reference="rest", corr_method="benjamini-hochberg", logeps=-500, copy=False,
+    method: Literal["t-test", "logreg", "wilcoxon", "t-test_overestim_var"] = "t-test"
+):
     rank_res = sc.tl.rank_genes_groups(
         adata, groupby=groupby, method=method, corr_method=corr_method, copy=True, reference=reference
     ).uns["rank_genes_groups"]
@@ -279,7 +283,9 @@ def GSEA(
     # res["significant_fraction"] = res["significant_size"] / res["geneset_size"]
 
     res["matched_fraction"] = res["matched_size"] / res["geneset_size"]
-    res["-log10_fdr"] = -np.log10(res["fdr"])
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        res["-log10_fdr"] = -np.log10(res["fdr"])
     res["-log10_fdr"] = res["-log10_fdr"].clip(lower=0, upper=res["-log10_fdr"])
 
     res = res.sort_values("-log10_fdr", ascending=False)
