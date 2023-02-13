@@ -7,3 +7,4 @@ from .violin import violin
 from .qc import dispersion_plot, qc_violin, mt_plot
 from .pca import pca_explain_var, pca_explain_corr, pca_corr_circle
 from .heatmap import heatmap
+from .subplots import subplots

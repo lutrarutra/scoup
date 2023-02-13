@@ -87,9 +87,23 @@ def _rank_group(adata, rank_res, groupby, idx, ref_name, logeps):
         adata[adata.obs[groupby] == ref_name, df.index].layers["counts"].mean(axis=0)
     ).flatten()
 
+    df["var_expression"] = np.asarray(
+        adata[adata.obs[groupby] == ref_name, df.index].layers["counts"].var(axis=0)
+    ).flatten()
+
+    disp = df["var_expression"] / df["mu_expression"]
+    df["dispersion"] = np.nan_to_num(disp, nan=disp.min())
+
     df["log_mu_expression"] = np.asarray(
         np.log1p(adata[:, df.index].layers["counts"]).mean(0)
     ).flatten()
+
+    df["log_var_expression"] = np.asarray(
+        np.log1p(adata[:, df.index].layers["counts"]).var(0)
+    ).flatten()
+
+    disp = df["log_var_expression"] / df["log_mu_expression"]
+    df["log_dispersion"] = np.nan_to_num(disp, nan=disp.min())
 
     df["dropout"] = (
         1.0 - np.asarray(
