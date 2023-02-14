@@ -34,15 +34,15 @@ def calculate_dispersion_metrics(adata):
     adata.var["mu"] = ncounts.mean(0)
 
 
-def apply_mt_qc(adata, mt_prefix="MT-"):
+def calculate_qc_metrics(adata, mt_prefix="MT-"):
     adata.var["mt"] = adata.var_names.str.startswith(mt_prefix)
     sc.pp.calculate_qc_metrics(
         adata, qc_vars=["mt"], percent_top=False, log1p=False, inplace=True
     )
 
-def scale_log_center(adata, target_sum=None):
+def scale_log_center(adata, target_sum=None, norm_factor_key=None, exclude_highly_expressed=False):
     adata.layers["counts"] = adata.X.copy()
-    sc.pp.normalize_total(adata, target_sum=target_sum)
+    sc.pp.normalize_total(adata, target_sum=target_sum, key_added=norm_factor_key, exclude_highly_expressed=exclude_highly_expressed)
     adata.layers["ncounts"] = adata.X.copy()
     sc.pp.log1p(adata)
     adata.layers["centered"] = np.asarray(

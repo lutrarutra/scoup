@@ -1,4 +1,5 @@
 from typing import Literal
+import warnings
 
 import plotly.express as px
 
@@ -71,7 +72,9 @@ def pca_explain_corr(adata, y_var: Literal["R", "R^2"] = "R", n_pcs=None, layout
 
     for i, cat in enumerate(cats):
         for j in range(n_pcs):
-            Rs[j, i] = np.corrcoef(adata.obs[cat].cat.codes, adata.obsm["X_pca"][:, j])[0, 1]
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                Rs[j, i] = np.corrcoef(adata.obs[cat].astype("category").cat.codes, adata.obsm["X_pca"][:, j])[0, 1]
             if y_var == "R^2":
                 Rs[j, i] = Rs[j, i] ** 2
 

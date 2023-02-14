@@ -42,7 +42,7 @@ def projection(
     adata, obsm_layer: str = "X_umap", hue=None, hue_layer="log1p",
     hue_aggregate: Literal["abs", None] = "abs", fig_path=None,
     continuous_cmap="viridis", discrete_cmap="ScanPy Default",
-    layout=default_layout, components=None,
+    layout=default_layout, components=None, pixels=False
 ):
     fig = go.Figure()
 
@@ -57,8 +57,12 @@ def projection(
         if hue in adata.obs_keys():
             hue_title = hue
             color = adata.obs[hue].values
+            
             if not pd.api.types.is_numeric_dtype(color):
                 cmap = discrete_cmap
+                _order = color.unique().tolist()
+                cats = adata.obs[hue].cat.categories.tolist()
+                cmap = [cmap[cats.index(cat)] for cat in _order]
                 fig = _add_traces(fig, _legend(
                     categories=adata.obs[hue].cat.categories.tolist(),
                     colors=discrete_cmap, marker_outline_width=1
@@ -136,6 +140,12 @@ def projection(
                 "UMAP " + str(components[1] + 1) + ": %{y:.1f}"
             )
         )
+        if pixels:
+            scatter.update_traces(
+                marker=dict(
+                    size=1.0, opacity=1.0, line=dict(color="black", width=0.0)
+                )
+            )
 
         scatter.update_layout(showlegend=True)
 
