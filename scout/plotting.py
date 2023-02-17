@@ -14,6 +14,191 @@ import matplotlib.lines as mline
 from sklearn.cluster import KMeans, AgglomerativeClustering
 from scipy.cluster.hierarchy import dendrogram
 
+from .tools import subplot_dims, subplot_idx
+
+
+def dispersion_plot(
+    adata, groupby, color="abs_score", style=None,
+    nrows=None, ncols=None,
+    cmap="viridis", size=None,
+    path=None, figsize=(6, 5), dpi=80,
+    xlim=None, ylim=None, vmax=5.0
+):
+    n_figs = len(adata.obs[groupby].cat.categories)
+    ncols, nrows = subplot_dims(n_figs, ncols=ncols, nrows=nrows)
+
+    f, ax = plt.subplots(ncols=ncols, nrows=nrows, figsize=(figsize[0] * ncols, figsize[1] * nrows), dpi=dpi)
+
+    vmin = 0
+
+    norm = matplotlib.colors.TwoSlopeNorm(vmin=vmin, vcenter=(vmax-vmin)/2, vmax=vmax)
+
+    for i, group in enumerate(adata.obs[groupby].cat.categories):
+        idx = subplot_idx(i, ncols=ncols, nrows=nrows)
+
+        sns.scatterplot(
+            x=adata.varm[f"mu_expression_{groupby}"][:, i],
+            y=adata.varm[f"cv_{groupby}"][:, i] ** 2,
+            c=np.log1p(adata.uns["de"][groupby][f"{group} vs. rest"][color].values),
+            style=adata.var[style] if style is not None else None,
+            size=size,
+            edgecolor=(0, 0, 0, 1),
+            # color=(0, 0, 0, 0),
+            linewidth=0.8,
+            ax=ax[idx],
+            cmap=cmap, norm=norm
+        )
+        ax[idx].set_title(f"{group}")
+
+        ax[idx].set_yscale("log")
+        ax[idx].set_xscale("log")
+
+        if xlim != None:
+            ax[idx].set_xlim(xlim)
+        if ylim != None:
+            ax[idx].set_ylim(ylim)
+
+    f.text(0.5, 0.1, "Mu Expression", ha="center")
+    f.text(0.12, 0.5, "(CV)^2", va="center", rotation=90)
+
+    f.subplots_adjust(right=0.8)
+    cbar_ax = f.add_axes([0.85, 0.35, 0.03, 0.3])
+    colorbar = f.colorbar(
+        plt.cm.ScalarMappable(norm=norm, cmap=cmap), orientation="vertical", cax=cbar_ax
+    )
+    # colorbar.ax.set_ylabel(, fontsize=10, loc="center", labelpad=-40)
+
+    if path:
+        plt.savefig(path, bbox_inches="tight")
+
+    plt.show()
+
+def pseudo_bulk_plot(
+    adata, style=None, figsize=(6, 5), dpi=80, ncols=None, nrows=None,
+    cmap="seismic", vmin=None, vmax=None, vcenter=0.0, path=None
+):
+    n_figs = adata.varm["bulk"].shape[1]
+    ncols, nrows = subplot_dims(n_figs, ncols=ncols, nrows=nrows)
+
+    f, ax = plt.subplots(ncols=ncols, nrows=nrows, figsize=(figsize[0] * ncols, figsize[1] * nrows), dpi=dpi)
+
+    if vmin == None:
+        vmin = adata.varm["pseudo_factor"].min()
+    if vmax == None:
+        vmax = adata.varm["pseudo_factor"].max()
+    if vcenter == None:
+        vcenter = 0.0
+
+    norm = matplotlib.colors.TwoSlopeNorm(vmin=vmin, vcenter=vcenter, vmax=vmax)
+
+    if style is not None:
+        if style in adata.var.columns:
+            style = adata.var[style].values
+        else:
+            style = adata.varm[style]
+
+    for i in range(len(adata.uns["bulk_samples"])):
+        idx = subplot_idx(i, ncols=ncols, nrows=nrows)
+        _ax = ax[idx] if type(ax) is np.ndarray else ax
+        sns.scatterplot(
+            x=adata.varm["pseudo"][:, 0],
+            y=adata.varm["bulk"][:, i],
+            c=adata.varm["pseudo_factor"][:, i],
+            style=style[:, i] if style.ndim == 2 else style,
+            edgecolor=(0, 0, 0, 1),
+            ax=_ax,
+            linewidth=1,
+            cmap=cmap,
+            norm=norm,
+        ).set_title(f"Sample {adata.uns['bulk_samples'][i]}")
+
+        _ax.plot(
+            [0, max(adata.varm["pseudo"][:, 0].max(), adata.varm["bulk"][:, i].max())],
+            [0, max(adata.varm["pseudo"][:, 0].max(), adata.varm["bulk"][:, i].max())],
+            label="y=x",
+            c="royalblue",
+        )
+
+        _ax.set_xscale("log")
+        _ax.set_yscale("log")
+
+        # scalarmappaple = matplotlib.cm.ScalarMappable(norm=normalize, cmap=colormap)
+        # scalarmappaple.set_array(adata.varm["pseudo"][:, i])
+        # f.colorbar(scalarmappaple, fraction=0.05, pad=0.01, shrink=0.5)
+
+        # plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+
+    f.text(0.5, 0.1, "Pseudo Bulk", ha="center")
+    f.text(0.12, 0.5, "Bulk", va="center", rotation=90)
+
+    f.subplots_adjust(right=0.8)
+    cbar_ax = f.add_axes([0.85, 0.35, 0.03, 0.3])
+    f.colorbar(
+        plt.cm.ScalarMappable(norm=norm, cmap=cmap), orientation="vertical", cax=cbar_ax
+    )
+
+    if path:
+        plt.savefig(path, bbox_inches="tight")
+
+    plt.show()
+
+
+def dropout_plot(
+    adata, groupby, style=None,
+    nrows=None, ncols=None,
+    cmap="viridis", size=None,
+    path=None, figsize=(6, 5), dpi=80,
+    xlim=None, ylim=(-0.1, 1.1),
+):
+    n_figs = len(adata.obs[groupby].cat.categories)
+    ncols, nrows = subplot_dims(n_figs, ncols=ncols, nrows=nrows)
+
+    f, ax = plt.subplots(ncols=ncols, nrows=nrows, figsize=(figsize[0] * ncols, figsize[1] * nrows), dpi=dpi)
+
+    vmin = adata.varm[f"dropout_weight_{groupby}"].min()
+    vmax = adata.varm[f"dropout_weight_{groupby}"].max()
+
+    norm = matplotlib.colors.TwoSlopeNorm(vmin=vmin, vcenter=(vmax-vmin)/2, vmax=vmax)
+
+    if style is not None:
+        if style in adata.var.columns:
+            style = adata.var[style].values
+        else:
+            style = adata.varm[style]
+
+    for i, group in enumerate(adata.obs[groupby].cat.categories):
+        idx = subplot_idx(i, ncols=ncols, nrows=nrows)
+
+        sns.scatterplot(
+            x=adata.varm[f"nan_log_mu_expression_{groupby}"][:, i],
+            y=adata.varm[f"dropout_{groupby}"][:, i],
+            c=adata.varm[f"dropout_weight_{groupby}"][:, i],
+            style=style[:, i] if style.ndim == 2 else style,
+            size=size,
+            edgecolor=(0, 0, 0, 1),
+            # color=(0, 0, 0, 0),
+            linewidth=0.8,
+            ax=ax[idx],
+            cmap=cmap, norm=norm
+        )
+        ax[idx].set_title(f"{group}")
+        if xlim != None:
+            ax[idx].set_xlim(xlim)
+        if ylim != None:
+            ax[idx].set_ylim(ylim)
+
+    f.subplots_adjust(right=0.8)
+    cbar_ax = f.add_axes([0.85, 0.35, 0.03, 0.3])
+    colorbar = f.colorbar(
+        plt.cm.ScalarMappable(norm=norm, cmap=cmap), orientation="vertical", cax=cbar_ax
+    )
+    # colorbar.ax.set_ylabel(, fontsize=10, loc="center", labelpad=-40)
+
+    if path:
+        plt.savefig(path, bbox_inches="tight")
+
+    plt.show()
+
 def marker_volcano(df, x="logFC", y="-log_pvals_adj", hue="log_mu_expression", cmap="rocket", significance_threshold=0.05, fig_path=None, fig_size=(10, 8), dpi=80):
     f, ax = plt.subplots(figsize=fig_size, dpi=dpi)
 
@@ -168,36 +353,6 @@ def gsea_volcano(gsea_df, x="nes", y="-log10_fdr", hue="matched_fraction", cmap=
 
     plt.show()
 
-def dispersion_plot(adata, layer=None):
-    f, ax = plt.subplots(figsize=(8,8), dpi=80)
-
-    ncounts = sc.pp.normalize_total(adata, layer=layer, inplace=False)["X"]
-
-    if "log1p" in adata.uns:
-        x = adata.X.mean(0)
-    else: 
-        x = np.log1p(ncounts).mean(0)
-
-    y = (ncounts.std(0)/ncounts.mean(0))**2
-    logx = np.log(x)
-    logy = np.log(y)
-
-    sns.scatterplot(
-        x=x, y=y,
-        edgecolor=(0,0,0,1), color=(1,1,1,0), ax=ax, linewidth=1
-    )
-
-    fit = np.poly1d(np.polyfit(logx, logy, 2))
-    xx = np.linspace(logx.min(), logx.max(), 1000)
-    ax.plot(np.exp(xx), np.exp(fit(xx)), color="royalblue")
-
-    ax.set_xscale("log")
-    ax.set_yscale("log")
-    ax.set_xlabel("log mean")
-    ax.set_ylabel("(CV)^2")
-
-    plt.savefig("dispersion_plot.png", bbox_inches="tight")
-    plt.show()
 
 def _dendrogram(model, **kwargs):
     # create the counts of samples under each node

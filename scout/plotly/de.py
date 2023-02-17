@@ -39,7 +39,7 @@ def scatter_marker_scores(
         df.reset_index(), x=x, y=y, color=hue, symbol=style,
         symbol_map={True: "circle", False: "x"}, hover_name=df.index.name,
         color_continuous_scale=cmap,
-        hover_data={x: ":.2f", y: ":.2f", hue: ":.2f", style: False}
+        hover_data={x: ":.2f", y: ":.2f", hue: ":.2f", style: True, "pvals_adj": ":.2f", "cv": ":.2f"}
         # labels={x: "Log2 FC", y: "-Log10 p-value ", hue: "log2 Mean Expression"},
     )
     fig.update_traces(marker=dict(size=5, line=dict(width=1, color="DarkSlateGrey")))

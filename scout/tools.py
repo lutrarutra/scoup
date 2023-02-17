@@ -10,6 +10,23 @@ import pandas as pd
 import scanpy as sc
 import scipy
 
+def subplot_dims(n_groups, ncols=None, nrows=None):
+    if ncols is None and nrows is None:
+        ncols = min(2, n_groups)
+        nrows = int(np.ceil(n_groups / ncols))
+    elif ncols is None:
+        ncols = int(np.ceil(n_groups / nrows))
+    elif nrows is None:
+        nrows = int(np.ceil(n_groups / ncols))
+
+    return ncols, nrows
+
+def subplot_idx(i, ncols, nrows):
+    row = int(np.floor(i / ncols))
+    col = i % ncols
+
+    return row, col
+
 def get_categoric(adata):
     return list(
         set(adata.obs.columns) - set(adata.obs._get_numeric_data().columns) - set(["barcode"])
@@ -83,36 +100,19 @@ def _rank_group(adata, rank_res, groupby, idx, ref_name, logeps):
 
     df["significant"] = df["pvals_adj"] < 0.05
 
-    df["mu_expression"] = np.asarray(
-        adata[adata.obs[groupby] == ref_name, df.index].layers["counts"].mean(axis=0)
-    ).flatten()
+    group_idx = adata.obs[groupby].astype("str").astype("category").cat.categories.tolist().index(ref_name)
 
-    df["var_expression"] = np.asarray(
-        adata[adata.obs[groupby] == ref_name, df.index].layers["counts"].var(axis=0)
-    ).flatten()
+    min_logfc, max_logfc = np.quantile(df["logFC"], [0.05, 0.95])
 
-    disp = df["var_expression"] / df["mu_expression"]
-    df["dispersion"] = np.nan_to_num(disp, nan=disp.min())
-
-    df["log_mu_expression"] = np.asarray(
-        np.log1p(adata[:, df.index].layers["counts"]).mean(0)
-    ).flatten()
-
-    df["log_var_expression"] = np.asarray(
-        np.log1p(adata[:, df.index].layers["counts"]).var(0)
-    ).flatten()
-
-    disp = df["log_var_expression"] / df["log_mu_expression"]
-    df["log_dispersion"] = np.nan_to_num(disp, nan=disp.min())
-
-    df["dropout"] = (
-        1.0 - np.asarray(
-            (adata[adata.obs[groupby] == ref_name, df.index].layers["counts"] == 0).mean(0)
-        ).flatten()
-    )
+    df["mu_expression"] = adata.varm[f"mu_expression_{groupby}"][:, group_idx]
+    df["log_mu_expression"] = adata.varm[f"log_mu_expression_{groupby}"][:, group_idx]
+    df["cv"] = adata.varm[f"cv_{groupby}"][:, group_idx]
 
     df["gene_score"] = (
-        df["logFC"] * (1-df["pvals_adj"]) * df["log_mu_expression"]# * (1.0 - df["dropout"])
+        np.clip(df["logFC"], min_logfc, max_logfc) *
+        (1-df["pvals_adj"]) *
+        df["log_mu_expression"]
+        # df["significant"]
         # np.sign(df["logFC"]) * (1-df["pvals_adj"]) #* df["log_mu_expression"]# * (1.0 - df["dropout"])
     )
 
@@ -123,22 +123,87 @@ def _rank_group(adata, rank_res, groupby, idx, ref_name, logeps):
     return df
 
 
+def sub_cluster(adata, groupby, key_added="sub_type", leiden_res=0.1):
+    adata.obs[key_added] = ""
+    for i, group in enumerate(adata.obs[groupby].cat.categories):
+        view = adata[adata.obs[groupby] == group, :]
+        res = sc.tl.leiden(
+            view,
+            resolution=leiden_res,
+            copy=True,
+            key_added="sub_type",
+            random_state=0,
+        ).obs["sub_type"]
+
+        adata.obs.loc[res.index, key_added] = res.values
+        adata.obs.loc[res.index, key_added] = adata.obs.loc[res.index, "sub_type"].apply(lambda x: f"{group}_{x}")
+
+    adata.obs[key_added] = adata.obs[key_added].astype("category")
+
+
+def group_stats(adata, groupby, eps=1e-8):
+    n_groups = len(adata.obs[groupby].cat.categories)
+    n_genes = adata.n_vars
+    
+    adata.varm[f"mu_expression_{groupby}"] = np.empty((n_genes, n_groups), np.float32)
+    adata.varm[f"var_expression_{groupby}"] = np.empty((n_genes, n_groups), np.float32)
+    adata.varm[f"cv_{groupby}"] = np.empty((n_genes, n_groups), np.float32)
+    adata.varm[f"log_mu_expression_{groupby}"] = np.empty((n_genes, n_groups), np.float32)
+    adata.varm[f"log_var_expression_{groupby}"] = np.empty((n_genes, n_groups), np.float32)
+    adata.varm[f"dropout_{groupby}"] = np.empty((n_genes, n_groups), np.float32)
+    adata.varm[f"nan_mu_expression_{groupby}"] = np.empty((n_genes, n_groups), np.float32)
+    adata.varm[f"nan_log_mu_expression_{groupby}"] = np.empty((n_genes, n_groups), np.float32)
+    adata.varm[f"dropout_weight_{groupby}"] = np.empty((n_genes, n_groups), np.float32)
+
+
+    for i, group in enumerate(adata.obs[groupby].cat.categories):
+        adata.varm[f"mu_expression_{groupby}"][:, i] = np.asarray(
+            adata[adata.obs[groupby] == group, :].layers["counts"].mean(axis=0)
+        ).flatten()
+
+        adata.varm[f"var_expression_{groupby}"][:, i] = np.asarray(
+            adata[adata.obs[groupby] == group, :].layers["counts"].var(axis=0)
+        ).flatten()
+
+        cv = adata[adata.obs[groupby] == group, :].layers["counts"].std(axis=0) / adata.varm[f"mu_expression_{groupby}"][:, i]
+        # nans where std and mu is 0, and posinf where std > 0 and mu is 0
+        adata.varm[f"cv_{groupby}"][:, i] = np.nan_to_num(cv, nan=0.0, posinf=0.0)
+
+        adata.varm[f"log_mu_expression_{groupby}"][:, i] = np.asarray(
+            np.log1p(adata[adata.obs[groupby] == group, :].layers["counts"]).mean(0)
+        ).flatten()
+
+        adata.varm[f"log_var_expression_{groupby}"][:, i] = np.asarray(
+            np.log1p(adata[adata.obs[groupby] == group, :].layers["counts"]).var(0)
+        ).flatten()
+
+        adata.varm[f"dropout_{groupby}"][:, i] = np.asarray(
+            (adata[adata.obs[groupby] == group, :].layers["counts"] == 0).mean(0)
+        ).flatten()
+
+        nancounts = adata[adata.obs[groupby] == group, :].layers["counts"].copy()
+        nancounts[nancounts == 0] = np.nan
+
+        adata.varm[f"nan_mu_expression_{groupby}"][:, i] = np.nan_to_num(np.nanmean(nancounts, 0), nan=0) 
+        adata.varm[f"nan_log_mu_expression_{groupby}"][:, i] = np.nan_to_num(np.nanmean(np.log1p(nancounts), 0), nan=0)
+
+        adata.varm[f"dropout_weight_{groupby}"][:, i] = adata.varm[f"dropout_{groupby}"][:, i] * adata.varm[f"nan_log_mu_expression_{groupby}"][:, i]
+
 def rank_marker_genes(
     adata, groupby, reference="rest", corr_method="benjamini-hochberg", logeps=-500, copy=False,
     method: Literal["t-test", "logreg", "wilcoxon", "t-test_overestim_var"] = "t-test"
 ):
+    if f"mu_expression_{groupby}" not in adata.varm.keys():
+        group_stats(adata, groupby)
+
     rank_res = sc.tl.rank_genes_groups(
         adata, groupby=groupby, method=method, corr_method=corr_method, copy=True, reference=reference
     ).uns["rank_genes_groups"]
 
     res = {}
 
-    i = 0
-    for ref in adata.obs[groupby].unique():
-        if ref == reference:
-            continue
+    for i, ref in enumerate(rank_res["names"].dtype.names):
         res[f"{str(ref)} vs. {reference}"] = _rank_group(adata, rank_res, groupby, i, ref, logeps)
-        i += 1
 
     if not copy:
         if "de" not in adata.uns:
