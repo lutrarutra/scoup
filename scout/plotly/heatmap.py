@@ -101,7 +101,7 @@ def heatmap(
             cell_order = []
             for cell_type in adata.obs[cluster_cells_by].cat.categories.tolist():
                 dendro = tools.dendrogram(
-                    adata[adata.obs[cluster_cells_by] == cell_type, :], groupby="barcode",
+                    adata[adata.obs[cluster_cells_by] == cell_type, :].copy(), groupby="barcode",
                     var_names=var_names, inplace=False
                 )
                 _dendro = list(set(dendro["categories_ordered"]) & set(adata.obs_names))

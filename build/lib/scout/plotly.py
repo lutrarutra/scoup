@@ -24,6 +24,8 @@ PLOTLY_DISCRETE_COLORS = px.colors.qualitative.Plotly
 SC_DEFAULT_COLORS = sc.pl.palettes.default_20
 NONE_COLOR = "#d3d3d3"
 
+from . import tools
+
 
 def seismic(zcenter, wcenter=0.05):
     return [
@@ -293,7 +295,7 @@ def heatmap(
 
     if not f"dendrogram_barcode" in adata.uns.keys():
         adata.obs["barcode"] = pd.Categorical(adata.obs_names)
-        sc.tl.dendrogram(adata, groupby="barcode", var_names=var_names)
+        tools.dendrogram(adata, groupby="barcode", var_names=var_names)
 
     cell_order = adata.uns["dendrogram_barcode"]["categories_ordered"]
 

@@ -56,15 +56,16 @@ def projection(
     else:
         if hue in adata.obs_keys():
             hue_title = hue
-            color = adata.obs[hue].values
+            color = adata.obs[hue]
             
             if not pd.api.types.is_numeric_dtype(color):
                 cmap = discrete_cmap
                 _order = color.unique().tolist()
-                cats = adata.obs[hue].cat.categories.tolist()
+                color = color.values
+                cats = adata.obs[hue].astype("category").cat.categories.tolist()
                 cmap = [cmap[cats.index(cat)] for cat in _order]
                 fig = _add_traces(fig, _legend(
-                    categories=adata.obs[hue].cat.categories.tolist(),
+                    categories=adata.obs[hue].astype("category").cat.categories.tolist(),
                     colors=discrete_cmap, marker_outline_width=1
                 ))
             else:
@@ -143,7 +144,7 @@ def projection(
         if pixels:
             scatter.update_traces(
                 marker=dict(
-                    size=1.0, opacity=1.0, line=dict(color="black", width=0.0)
+                    size=2.0, opacity=1.0, line=dict(color="black", width=0.0)
                 )
             )
 

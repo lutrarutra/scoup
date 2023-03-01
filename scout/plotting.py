@@ -15,6 +15,7 @@ from sklearn.cluster import KMeans, AgglomerativeClustering
 from scipy.cluster.hierarchy import dendrogram
 
 from .tools import subplot_dims, subplot_idx
+from . import tools
 
 
 def dispersion_plot(
@@ -437,7 +438,7 @@ def heatmap(
 
         if free_sort_cells:
             if not f"dendrogram_barcode" in adata.uns.keys():
-                sc.tl.dendrogram(adata, groupby="barcode", var_names=var_names)
+                tools.dendrogram(adata, groupby="barcode", var_names=var_names)
             cell_dendro = adata.uns["dendrogram_barcode"]
             cell_order = cell_dendro["categories_ordered"]
         else:
@@ -450,7 +451,7 @@ def heatmap(
                 #     cell_order.extend(_dendro)
                 # else:
                 # TODO: multithreading
-                dendro = sc.tl.dendrogram(adata[adata.obs[groupby] == cell_type], groupby="barcode", inplace=False)
+                dendro = tools.dendrogram(adata[adata.obs[groupby] == cell_type], groupby="barcode", inplace=False, var_names=var_names)
                 _dendro = list(set(dendro["categories_ordered"]) & set(adata.obs_names))
                 cell_order.extend(_dendro)
                 # adata.uns[f"{cell_type}_order"] = dendro["categories_ordered"]
@@ -549,7 +550,7 @@ def clustermap(adata, clusterby="leiden", categorical_features="sample", layer="
     for gi, grp in enumerate(categorical_features):
         axes[gi][0].set_yticks([0.5])
         axes[gi][0].set_yticklabels([grp.capitalize()])
-        adata.obs[f"{grp}_idx"] = adata.obs[grp].cat.codes
+        adata.obs[f"{grp}_idx"] = adata.obs[grp].astype("category").cat.codes
 
     for i, group_i in enumerate(groups):
         # Index n_cells per cluster and top n_genes
@@ -595,13 +596,13 @@ def clustermap(adata, clusterby="leiden", categorical_features="sample", layer="
         
     f.colorbar(plt.cm.ScalarMappable(norm=matplotlib.colors.TwoSlopeNorm(vmin=vmin, vmax=vmax, vcenter=0), cmap="seismic"), ax=axes, orientation="vertical", fraction=0.05, pad=0.05, shrink=0.2)
 
-    for gi, grp in enumerate(categorical_features):
-        leg = f.legend(title=grp, labels=adata.obs[grp].cat.categories.tolist(), prop={"size": 24}, bbox_to_anchor=(0.95, 1.0 - 0.1 - gi/12))
-        plt.gca().add_artist(leg)
-        palette = palettes[gi%len(palettes)]
-        for l, legobj in enumerate(leg.legendHandles):
-            legobj.set_color(palette[l % len(palette)])
-            legobj.set_linewidth(8.0)
+    # for gi, grp in enumerate(categorical_features):
+    #     leg = f.legend(title=grp, labels=adata.obs[grp].astype("category").cat.categories.tolist(), prop={"size": 24}, bbox_to_anchor=(0.95, 1.0 - 0.1 - gi/12))
+    #     plt.gca().add_artist(leg)
+    #     palette = palettes[gi%len(palettes)]
+    #     for l, legobj in enumerate(leg.legendHandles):
+    #         legobj.set_color(palette[l % len(palette)])
+    #         legobj.set_linewidth(8.0)
 
     # Hide frames from dendrogram column
     for i in range(axes.shape[0]):

@@ -106,15 +106,24 @@ def _rank_group(adata, rank_res, groupby, idx, ref_name, logeps):
 
     df["mu_expression"] = adata.varm[f"mu_expression_{groupby}"][:, group_idx]
     df["log_mu_expression"] = adata.varm[f"log_mu_expression_{groupby}"][:, group_idx]
+    assert df["log_mu_expression"].isna().any() == False
     df["cv"] = adata.varm[f"cv_{groupby}"][:, group_idx]
 
     df["gene_score"] = (
-        np.clip(df["logFC"], min_logfc, max_logfc) *
-        (1-df["pvals_adj"]) *
-        df["log_mu_expression"]
+        # np.clip(df["logFC"], min_logfc, max_logfc) *
+        # df["logFC"] * (1-df["pvals_adj"]) * (1.0/df["cv"])
+        df["logFC"] *
+        (1-df["pvals_adj"]) 
+        * df["log_mu_expression"]
+        # df["z-score"]
+        # * (1/np.log1p(df["cv"]))
         # df["significant"]
         # np.sign(df["logFC"]) * (1-df["pvals_adj"]) #* df["log_mu_expression"]# * (1.0 - df["dropout"])
     )
+    # p = (adata[adata.obs[groupby].astype("category").cat.codes == group_idx, :].layers["counts"].sum(0) / adata.layers["counts"].sum(0)).copy()
+    # print(p.shape)
+    # # df["weight"] = 
+    # df["score"] = np.log1p(df["weight"]) * df["-log_pvals_adj"] * df["logFC"]
 
     df["abs_score"] = np.abs(df["gene_score"])
 
@@ -149,50 +158,59 @@ def group_stats(adata, groupby, eps=1e-8):
     adata.varm[f"var_expression_{groupby}"] = np.empty((n_genes, n_groups), np.float32)
     adata.varm[f"cv_{groupby}"] = np.empty((n_genes, n_groups), np.float32)
     adata.varm[f"log_mu_expression_{groupby}"] = np.empty((n_genes, n_groups), np.float32)
-    adata.varm[f"log_var_expression_{groupby}"] = np.empty((n_genes, n_groups), np.float32)
+    # adata.varm[f"log_var_expression_{groupby}"] = np.empty((n_genes, n_groups), np.float32)
     adata.varm[f"dropout_{groupby}"] = np.empty((n_genes, n_groups), np.float32)
-    adata.varm[f"nan_mu_expression_{groupby}"] = np.empty((n_genes, n_groups), np.float32)
-    adata.varm[f"nan_log_mu_expression_{groupby}"] = np.empty((n_genes, n_groups), np.float32)
-    adata.varm[f"dropout_weight_{groupby}"] = np.empty((n_genes, n_groups), np.float32)
+    # adata.varm[f"nan_mu_expression_{groupby}"] = np.empty((n_genes, n_groups), np.float32)
+    # adata.varm[f"nan_log_mu_expression_{groupby}"] = np.empty((n_genes, n_groups), np.float32)
+    # adata.varm[f"dropout_weight_{groupby}"] = np.empty((n_genes, n_groups), np.float32)
 
 
     for i, group in enumerate(adata.obs[groupby].cat.categories):
-        adata.varm[f"mu_expression_{groupby}"][:, i] = np.asarray(
-            adata[adata.obs[groupby] == group, :].layers["counts"].mean(axis=0)
-        ).flatten()
+        a = adata[adata.obs[groupby] == group, :].layers["counts"]
+        if isinstance(a, scipy.sparse.csr_matrix):
+            a = a.toarray()
 
-        adata.varm[f"var_expression_{groupby}"][:, i] = np.asarray(
-            adata[adata.obs[groupby] == group, :].layers["counts"].var(axis=0)
-        ).flatten()
+        adata.varm[f"mu_expression_{groupby}"][:, i] = np.asarray(a.mean(axis=0)).flatten()
 
-        cv = adata[adata.obs[groupby] == group, :].layers["counts"].std(axis=0) / adata.varm[f"mu_expression_{groupby}"][:, i]
+        assert np.isnan(adata.varm[f"mu_expression_{groupby}"][:, i]).any() == False
+
+        adata.varm[f"var_expression_{groupby}"][:, i] = np.asarray(a.var(axis=0)).flatten()
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            cv = a.std(axis=0) / adata.varm[f"mu_expression_{groupby}"][:, i]
         # nans where std and mu is 0, and posinf where std > 0 and mu is 0
         adata.varm[f"cv_{groupby}"][:, i] = np.nan_to_num(cv, nan=0.0, posinf=0.0)
 
-        adata.varm[f"log_mu_expression_{groupby}"][:, i] = np.asarray(
-            np.log1p(adata[adata.obs[groupby] == group, :].layers["counts"]).mean(0)
-        ).flatten()
+        adata.varm[f"log_mu_expression_{groupby}"][:, i] = np.asarray(np.log1p(a).mean(0)).flatten()
 
-        adata.varm[f"log_var_expression_{groupby}"][:, i] = np.asarray(
-            np.log1p(adata[adata.obs[groupby] == group, :].layers["counts"]).var(0)
-        ).flatten()
+        assert np.isnan(adata.varm[f"log_mu_expression_{groupby}"][:, i]).any() == False
+
+        # adata.varm[f"log_var_expression_{groupby}"][:, i] = np.asarray(
+        #     np.log1p(a)
+        # ).var(0).flatten()
 
         adata.varm[f"dropout_{groupby}"][:, i] = np.asarray(
-            (adata[adata.obs[groupby] == group, :].layers["counts"] == 0).mean(0)
+            (a == 0).mean(0)
         ).flatten()
 
-        nancounts = adata[adata.obs[groupby] == group, :].layers["counts"].copy()
-        nancounts[nancounts == 0] = np.nan
+        # nancounts = a.copy()
+        # nancounts[nancounts == 0] = np.nan
 
-        adata.varm[f"nan_mu_expression_{groupby}"][:, i] = np.nan_to_num(np.nanmean(nancounts, 0), nan=0) 
-        adata.varm[f"nan_log_mu_expression_{groupby}"][:, i] = np.nan_to_num(np.nanmean(np.log1p(nancounts), 0), nan=0)
+        # with warnings.catch_warnings():
+        #     warnings.simplefilter("ignore")
+        #     adata.varm[f"nan_mu_expression_{groupby}"][:, i] = np.nan_to_num(np.nanmean(nancounts, 0), nan=0)
+        #     adata.varm[f"nan_log_mu_expression_{groupby}"][:, i] = np.nan_to_num(np.nanmean(np.log1p(nancounts), 0), nan=0)
 
-        adata.varm[f"dropout_weight_{groupby}"][:, i] = adata.varm[f"dropout_{groupby}"][:, i] * adata.varm[f"nan_log_mu_expression_{groupby}"][:, i]
+        # adata.varm[f"dropout_weight_{groupby}"][:, i] = adata.varm[f"dropout_{groupby}"][:, i] * adata.varm[f"nan_log_mu_expression_{groupby}"][:, i]
 
 def rank_marker_genes(
     adata, groupby, reference="rest", corr_method="benjamini-hochberg", logeps=-500, copy=False,
     method: Literal["t-test", "logreg", "wilcoxon", "t-test_overestim_var"] = "t-test"
 ):
+    if adata.obs[groupby].dtype.name != "category":
+        adata.obs[groupby] = adata.obs[groupby].astype("category")
+
     if f"mu_expression_{groupby}" not in adata.varm.keys():
         group_stats(adata, groupby)
 
@@ -211,7 +229,7 @@ def rank_marker_genes(
 
         adata.uns["de"][groupby] = res
 
-        print(f"Added results to: adata.uns['de']['{groupby}']")
+        print(f"DE: added results to 'adata.uns['de']['{groupby}']'")
     else:
         return res
 

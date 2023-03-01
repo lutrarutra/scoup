@@ -63,7 +63,7 @@ def pca_explain_var(
 
 def pca_explain_corr(adata, y_var: Literal["R", "R^2"] = "R", n_pcs=None, layout=default_layout, fig_path=None):
     if n_pcs is None:
-        n_pcs = adata.uns["pca"]["variance_ratio"].shape[0]
+        n_pcs = adata.obsm["X_pca"].shape[1]
 
     cats = tools.get_categoric(adata)
     Rs = np.zeros((n_pcs, len(cats)))

@@ -5,6 +5,6 @@ layout = go.Layout(
     plot_bgcolor="white",
     margin=dict(t=10, b=10, l=10, r=10),
     width=700,
-    height=700,
+    height=500,
     autosize=False,
 )
