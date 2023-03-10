@@ -112,9 +112,8 @@ def _rank_group(adata, rank_res, groupby, idx, ref_name, logeps):
     df["gene_score"] = (
         # np.clip(df["logFC"], min_logfc, max_logfc) *
         # df["logFC"] * (1-df["pvals_adj"]) * (1.0/df["cv"])
-        df["logFC"] *
+        np.sign(df["logFC"]) *
         (1-df["pvals_adj"]) 
-        * df["log_mu_expression"]
         # df["z-score"]
         # * (1/np.log1p(df["cv"]))
         # df["significant"]

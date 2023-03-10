@@ -39,33 +39,32 @@ def _add_traces(to_figure, from_figure):
     return to_figure
 
 def projection(
-    adata, obsm_layer: str = "X_umap", hue=None, hue_layer="log1p",
-    hue_aggregate: Literal["abs", None] = "abs", fig_path=None,
+    adata, color=None, obsm_layer: str = "X_umap", color_layer="log1p",
+    color_aggregate: Literal["abs", None] = "abs", fig_path=None,
     continuous_cmap="viridis", discrete_cmap="ScanPy Default",
-    layout=default_layout, components=None, pixels=False
+    layout=default_layout, components=None, point_size=6.0, point_outline=1.0, point_opacity=1.0,
 ):
     fig = go.Figure()
 
     if type(discrete_cmap) == str:
         discrete_cmap = colors.get_discrete_colorscales()[discrete_cmap]
 
-    if hue is None:
-        color = None
-        hue_title = ""
+    if color is None:
+        color_label = ""
         cmap = None
     else:
-        if hue in adata.obs_keys():
-            hue_title = hue
-            color = adata.obs[hue]
+        if color in adata.obs_keys():
+            color_label = color
+            color = adata.obs[color]
             
             if not pd.api.types.is_numeric_dtype(color):
                 cmap = discrete_cmap
                 _order = color.unique().tolist()
                 color = color.values
-                cats = adata.obs[hue].astype("category").cat.categories.tolist()
-                cmap = [cmap[cats.index(cat)] for cat in _order]
+                cats = adata.obs[color_label].astype("category").cat.categories.tolist()
+                cmap = [cmap[cats.index(cat) % len(cmap)] for cat in _order]
                 fig = _add_traces(fig, _legend(
-                    categories=adata.obs[hue].astype("category").cat.categories.tolist(),
+                    categories=adata.obs[color_label].astype("category").cat.categories.tolist(),
                     colors=discrete_cmap, marker_outline_width=1
                 ))
             else:
@@ -77,21 +76,21 @@ def projection(
                     cmap = continuous_cmap
 
         else:
-            if isinstance(hue, str):
-                hue_title = hue
-                if hue_layer == "log1p" or hue_layer == "X":
-                    color = adata.X[:, adata.var.index.get_loc(hue)]
-                elif hue_layer in adata.layers.keys():
-                    color = adata.layers[hue_layer][:, adata.var.index.get_loc(hue)]
+            if isinstance(color, str):
+                color_label = color
+                if color_layer == "log1p" or color_layer == "X" or color_layer == None:
+                    color = adata.X[:, adata.var.index.get_loc(color)]
+                elif color_layer in adata.layers.keys():
+                    color = adata.layers[color_layer][:, adata.var.index.get_loc(color)]
                 else:
                     assert False
                     
-            elif isinstance(hue, list):
-                hue_title = "Marker Score"
-                if hue_aggregate == "abs":
-                    color = np.abs(adata[:, hue].layers["logcentered"]).mean(1)
-                elif hue_aggregate == None:
-                    color = adata[:, hue].layers["logcentered"].mean(1)
+            elif isinstance(color, list):
+                color_label = "Marker Score"
+                if color_aggregate == "abs":
+                    color = np.abs(adata[:, color].layers["logcentered"]).mean(1)
+                elif color_aggregate == None:
+                    color = adata[:, color].layers["logcentered"].mean(1)
             else:
                 assert False
 
@@ -133,7 +132,7 @@ def projection(
         )
         scatter.update_traces(
             marker=dict(
-                size=6.0, opacity=1.0, line=dict(color="black", width=1.0)
+                size=point_size, opacity=point_opacity, line=dict(color="black", width=point_outline)
             ),
             showlegend=False,
             hovertemplate=(
@@ -141,12 +140,6 @@ def projection(
                 "UMAP " + str(components[1] + 1) + ": %{y:.1f}"
             )
         )
-        if pixels:
-            scatter.update_traces(
-                marker=dict(
-                    size=2.0, opacity=1.0, line=dict(color="black", width=0.0)
-                )
-            )
 
         scatter.update_layout(showlegend=True)
 
@@ -174,7 +167,7 @@ def projection(
 
         scatter.update_traces(
             marker=dict(
-                size=3, line=dict(color="black", width=1)
+                size=point_size, opacity=point_opacity, line=dict(color="black", width=point_outline)
             ),
             showlegend=False,
             hovertemplate=(
@@ -202,9 +195,16 @@ def projection(
 
     fig.update_layout(
         legend=dict(
-            title=hue_title,
+            title=color_label,
             y=0.5
         ),
+        title=dict(
+            text=color_label,
+            xanchor="center",
+            x=0.5,
+            yanchor="top",
+            y=0.99,
+        )
     )
 
     fig.update_xaxes(
