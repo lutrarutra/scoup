@@ -113,7 +113,7 @@ def _rank_group(adata, rank_res, groupby, idx, ref_name, logeps):
         # np.clip(df["logFC"], min_logfc, max_logfc) *
         # df["logFC"] * (1-df["pvals_adj"]) * (1.0/df["cv"])
         np.sign(df["logFC"]) *
-        (1-df["pvals_adj"]) 
+        (1-df["pvals_adj"]) * np.abs(df["z-score"])
         # df["z-score"]
         # * (1/np.log1p(df["cv"]))
         # df["significant"]
